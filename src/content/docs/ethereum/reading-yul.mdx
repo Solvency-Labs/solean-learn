@@ -1,0 +1,77 @@
+---
+title: Reading Yul (worked example)
+description: Annotate a real-shaped Yul snippet line by line — the exact patterns you'll meet in the FORS verifier.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Question from '../../../components/Question.astro';
+
+You won't write much Yul, but you must *read* it — the FORS verifier's compiled form is Yul. This page walks a small example built from the same patterns FORS uses: reading calldata and hashing a pair of words.
+
+<Aside type="note">
+Recall from [The EVM & Yul](/solean-learn/ethereum/evm-and-yul/): memory is byte-addressed but read/written a 32-byte word at a time with `mload`/`mstore`, and `keccak256(offset, len)` hashes a memory range.
+</Aside>
+
+## Example 1 — hash two words (the Merkle pair-hash)
+
+This is *the* operation in the FORS tree climb:
+
+```yul
+function hash_pair(a, b) -> h {
+    mstore(0x00, a)        // write word a to memory [0x00, 0x20)
+    mstore(0x20, b)        // write word b to memory [0x20, 0x40)
+    h := keccak256(/* offset */ 0x00, /* len */ 0x40)   // hash 0x40 = 64 bytes from offset 0x00
+}
+```
+
+Line by line: store `a` in the first 32 bytes of scratch memory, store `b` in the next 32, then keccak the 64-byte block. That's `H(a ‖ b)` — exactly the Merkle node computation from the [worked example](/solean-learn/fors/worked-example/).
+
+<Question q="In the FORS climb, the order of the two arguments to hash_pair depends on something. What — and where did we see it?">
+The **index bit** at that level (the left/right rule from the [FORS worked example](/solean-learn/fors/worked-example/), Step 2). Bit 0 → `hash_pair(current, sibling)`; bit 1 → `hash_pair(sibling, current)`. The verifier must pick the order correctly at every level, which is why proving the unrolled climb matches the spec matters.
+</Question>
+
+## Example 2 — read a chunk of calldata
+
+The signature arrives as calldata. Yul reads it with `calldataload` (one word) or `calldatacopy` (a range into memory):
+
+```yul
+// load the 32-byte word of calldata starting at byte offset `off`
+let word := calldataload(off)
+
+// copy `len` bytes of calldata starting at `cdOff` into memory at `memOff`
+calldatacopy(memOff, cdOff, len)
+```
+
+FORS parses its 2448-byte signature by reading fixed offsets like this: `R` at one offset, `pkSeed` at the next, each tree's opening after that, the counter at the end.
+
+<Question q="ForsVerifier's signature is exactly 2448 bytes. Using Yul, how might the contract reject a wrong-length input before parsing anything?">
+By checking the calldata length up front, e.g. comparing the `bytes` length field (or `calldatasize()` adjusted for the selector/offset) against `2448` and reverting otherwise. "Non-2448-byte signatures are rejected" is one of the first properties the verity FORS model proves — a cheap, important guard that prevents reading past the intended layout.
+</Question>
+
+## Example 3 — bit extraction (selecting a leaf index)
+
+To get a leaf index, the verifier slices specific bits out of a word. Yul does this with shifts and masks:
+
+```yul
+// extract the a-bit field at bit position `pos` from word `w`
+function bitfield(w, pos, a) -> v {
+    v := and(shr(pos, w), sub(shl(a, 1), 1))   // (w >> pos) & ((1 << a) - 1)
+}
+```
+
+`shr(pos, w)` shifts right; `sub(shl(a,1),1)` builds a mask of `a` ones (`2^a - 1`). The result is an integer in `[0, 2^a)` — a valid leaf index for a height-`a` tree.
+
+<Question q="Why must we prove the extracted value v always lands in [0, 2^a)?">
+Because it indexes into a tree with exactly $2^a$ leaves. If a parsing/masking bug let `v` exceed that range, the climb logic could read the wrong sibling or go out of bounds — a correctness/soundness hazard. The mask `(1 << a) - 1` guarantees the range *by construction*, and that's exactly the kind of small structural fact a proof pins down.
+</Question>
+
+## How to read Yul without drowning
+
+<Aside type="tip">
+1. **Find the memory layout first.** Note which scratch offsets (`0x00`, `0x20`, `0x40`, the free pointer at `0x40`) are used for what.
+2. **Treat `keccak256`, `mload/mstore`, `calldataload/copy` as the verbs.** Everything else is arithmetic glue.
+3. **Map each block back to the spec.** "This is the pair-hash", "this is index extraction", "this is the length guard".
+4. **Don't trace gas.** It's noise for correctness.
+</Aside>
+
+Use [evm.codes](https://www.evm.codes/) whenever an opcode is unfamiliar. Next, see the full algorithm in [FORS, line by line](/solean-learn/fors/the-contract/).

@@ -1,0 +1,70 @@
+---
+title: What formal verification is
+description: Proof assistants, the idea of machine-checked proof, and soundness vs. completeness — before any Lean syntax.
+---
+
+import Question from '../../../components/Question.astro';
+
+Before syntax, the mindset. Formal verification is unfamiliar to most of the team, and the *mental model* matters more than memorizing tactics.
+
+## The core idea
+
+A **formal proof** is an argument written in so much detail that a *computer* can check every step mechanically. A **proof assistant** (we use **Lean 4**) is the program that does that checking. You write definitions and theorems; Lean refuses to accept a "proof" unless it's airtight.
+
+The payoff: when Lean says your theorem is proved, there's no "looks right to me" — it's checked down to the axioms. The risk moves entirely to two places:
+
+1. **Did you state the right theorem?** (Lean checks the proof, not your intent.)
+2. **What did you assume?** (Anything you took as an axiom or hypothesis is trusted, not proven.)
+
+This is why the project obsesses over **boundaries** — the value of a proof is exactly as good as your statement and your assumptions. "We proved X **under assumption Y**" is the honest unit of work.
+
+## Modeling, then proving
+
+You can't prove things about Solidity bytes directly. The workflow is always:
+
+```
+real artifact   ──model──▶   a precise object in Lean   ──prove──▶   a theorem about that object
+(ForsVerifier)               (a function / inductive)                ("recover is correct, given keccak")
+```
+
+Two distinct risks live here:
+
+- **Modeling gap** — does the Lean object faithfully match the real contract? (Tools like [EVMYulLean](/solean-learn/tooling/evmyullean/) shrink this gap by modeling the *actual* EVM/Yul, not a hand-wave.)
+- **Proof gap** — none, once Lean accepts it. That's the part you get for free.
+
+## Soundness vs. completeness (don't mix these up)
+
+Two words you'll hear constantly, easy to confuse:
+
+- **Soundness** — "if it says *valid*, it really is valid." No false accepts. For our verifier: *you can't make `recover` return the legitimate signer without a genuine signature.* **This is the property that matters for security.**
+- **Completeness** — "if it really is valid, it says *valid*." No false rejects. For our verifier: *a genuine signature is always accepted.* This is about not being annoying/broken, not about security.
+
+When in doubt, the scary direction is **soundness**: a soundness bug lets an attacker forge.
+
+## Check yourself
+
+<Question q="When Lean accepts your proof, which risk is eliminated — and which two risks remain?">
+The **proof gap** is eliminated: the argument is mechanically checked down to the axioms, so it's not "looks right to me." Two risks remain: (1) **did you state the right theorem?** — Lean checks the proof, not your intent; (2) **what did you assume?** — anything taken as an axiom or hypothesis is trusted, not proven.
+</Question>
+
+<Question q="Why does 'we proved X' mean little on its own, without naming the assumptions?">
+A theorem is only as strong as its hypotheses. "X" might hold only *under* a strong or even false assumption, in which case the real-world guarantee is weak. The honest unit of work is "we proved X **under assumption Y**" — which is why the project insists on naming every boundary and assumption out loud.
+</Question>
+
+<Question q="We treat keccak as an assumption. If keccak were later found broken, what happens to our FORS soundness proof?">
+The proof still holds *exactly as stated* — it was always "sound **given** keccak behaves like a good hash." What fails is the real-world guarantee, because the *assumption* failed, not the logic. The theorem is conditional; trust lives in the assumption. That's precisely why we [name keccak as a trusted boundary](/solean-learn/task/) rather than pretending it's proven.
+</Question>
+
+## What you do *not* need
+
+You don't need to be a Lean wizard to contribute. Reading definitions, following along in proofs, and writing small lemmas is enough to be useful early. The deep tactic mastery comes with time.
+
+## Next
+
+[Lean 4 by example](/solean-learn/lean/by-example/) gives you just enough concrete syntax — types, `Prop`, a definition, and a tiny proof — to start reading the real models.
+
+### Curated external resources
+
+- **"Theorem Proving in Lean 4"** (`leanprover.github.io/theorem_proving_in_lean4/`) — the canonical tutorial. Work through the first several chapters (Dependent Type Theory, Propositions and Proofs, Tactics). This is the main external study item of the whole guide.
+- **"Mathematics in Lean"** — more example-driven; good as a second pass or if TPIL feels too abstract.
+- **The Lean community Zulip** — where to ask when stuck; the community is famously welcoming.

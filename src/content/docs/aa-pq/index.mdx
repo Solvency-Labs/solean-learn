@@ -1,0 +1,64 @@
+---
+title: ERC-4337 & smart wallets
+description: Account abstraction, UserOps, and the smart-wallet pattern our verifier plugs into.
+---
+
+import Question from '../../../components/Question.astro';
+
+The FORS verifier doesn't run in a vacuum. It's the cryptographic heart of a **smart-contract wallet**. This track explains that surrounding machinery — the *top layer* of [the stack map](/solean-learn/orientation/stack-map/).
+
+## The problem account abstraction solves
+
+A normal Ethereum account (an **EOA**) is *defined by* an ECDSA key: "you are whoever can produce an ECDSA signature for this address." You can't change the rule. You can't use a different signature scheme. You can't add "require 2 of 3 signers" or "require a passkey."
+
+**Account abstraction (AA)** breaks that hard-coding: it lets a *smart contract* be the account, so the contract's *code* decides what counts as a valid authorization. The rule becomes programmable.
+
+That programmability is the whole game for us: **if the account's validity rule is just code, we can make that code check a post-quantum signature instead of ECDSA.**
+
+## ERC-4337, the deployed-today version of AA
+
+ERC-4337 implements AA *without* changing the Ethereum protocol, using a parallel mempool of pseudo-transactions:
+
+- A **UserOperation** (`UserOp`) is a struct describing "what the user wants to do" + a signature. It is *not* a normal transaction.
+- A **Bundler** collects UserOps and submits them in a real transaction.
+- A singleton **EntryPoint** contract calls each wallet's `validateUserOp(...)`, and if validation passes, executes the requested action.
+- The **smart wallet** is the contract implementing `validateUserOp` — *this* is where our verifier gets called.
+
+```
+UserOp ──▶ Bundler ──▶ EntryPoint ──▶ wallet.validateUserOp ──▶ (FORS verifier) ──▶ execute
+```
+
+## What the wallet checks (and what SoLean proves)
+
+A well-behaved `validateUserOp` does a sequence of guards before allowing execution:
+
+1. Called by the trusted **EntryPoint**? (caller guard)
+2. **Nonce** fresh? (anti-replay)
+3. **Domain** correct? (this wallet, this chain — anti cross-domain replay)
+4. **Signature valid?** ← this is the call into the FORS verifier
+5. Advance the nonce (checked arithmetic, no overflow).
+
+SoLean's existing proofs are about exactly this list: *successful validation implies every guard passed*, *the same UserOp can't replay*, and so on — **while treating step 4 as an abstract oracle**. Our FORS task is to make step 4 concrete. See [SoLean](/solean-learn/tooling/solean/) and [the task](/solean-learn/task/).
+
+## Check yourself
+
+<Question q="What single property of account abstraction makes PQ migration possible *without* changing the Ethereum protocol?">
+The account's validity rule is **code**, not a fixed key. Because a smart wallet decides for itself what counts as a valid authorization, you can deploy one whose rule is "valid iff this post-quantum signature verifies" — today, with no hard fork. That's the whole basis of [Antonio's thesis](/solean-learn/aa-pq/why-pq-needs-aa/).
+</Question>
+
+<Question q="In the 5-step `validateUserOp` guard list, which step is the FORS verifier — and which steps does SoLean already prove while keeping the verifier abstract?">
+Step **4** ("signature valid?") is the call into the FORS verifier. SoLean already proves the *structure* around it — the EntryPoint guard (1), nonce/anti-replay (2), domain (3), and the checked nonce increment (5), plus that execution is gated on validation — **treating step 4 as an abstract oracle**. The FORS task makes step 4 concrete. See [SoLean](/solean-learn/tooling/solean/).
+</Question>
+
+<Question q="Why is the nonce check described as 'anti-replay'?">
+A fresh-nonce requirement means each UserOp is only valid once: after a successful validation the wallet advances its nonce, so re-submitting the same UserOp fails the `nonce == stored nonce` check. Without it, anyone could replay a previously valid (signature-and-all) operation. SoLean proves exactly this: the same UserOp can't validate twice on the post-state.
+</Question>
+
+## Where this is heading
+
+Continue to [Why PQ Ethereum rides on AA](/solean-learn/aa-pq/why-pq-needs-aa/) for the strategic argument — Antonio Sanso's thesis that this is *the* migration path — and the two big caveats (EIP-7702 and the bundler's ECDSA dependence) that the project is careful to call out as non-claims.
+
+### Curated external resources
+
+- **EIP-4337 spec** (`eips.ethereum.org/EIPS/eip-4337`) — dense but authoritative. Read the "Specification" overview and the `UserOperation` struct; skip the mempool/DoS-protection details on a first pass.
+- **ethereum.org "Account abstraction" page** — the gentler conceptual intro; read this first if the EIP is too much.

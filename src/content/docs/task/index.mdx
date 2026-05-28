@@ -1,0 +1,77 @@
+---
+title: Verifying ForsVerifier.sol
+description: What "verify the contract" actually means here — the scope, what's trusted, the two routes, and the open questions.
+---
+
+import Question from '../../../components/Question.astro';
+
+This is where the four tracks converge. By now you should be able to read every layer of [the stack map](/solean-learn/orientation/stack-map/); this page turns it into the actual job.
+
+## The assignment
+
+From the kickoff with Antonio Sanso: **formally verify [`ForsVerifier.sol`](https://github.com/RivaLabs-Core/NiceTry/blob/main/src/Verifiers/ForsVerifier.sol)** — the standalone FORS+C signature verifier that powers a PQ account-abstraction wallet.
+
+## What "verify" means here
+
+`recover(sig, digest)` is a `pure` function: bytes in, address out. "Verifying" it means proving its **specification** and, more importantly, its **soundness**:
+
+- **Spec / completeness** — a genuine FORS+C signature for `digest` makes `recover` return the legitimate signer.
+- **Soundness** *(the security one)* — you **cannot** make `recover` return the intended signer without a genuine signature. No forgery path.
+
+In [T4 terms](/solean-learn/lean/): soundness is the direction an attacker cares about. The already-observed structural fact — *a signature recovers a non-zero signer only when the omitted FORS tree index is forced to zero* — is a soundness-flavored claim worth nailing down.
+
+## The scoping decision: keccak is trusted
+
+The single most important scope call from the kickoff:
+
+> **We do not prove keccak.** It's treated as already-correct (it's modeled in [EVMYulLean](/solean-learn/tooling/evmyullean/)'s `SpongeHash`, and used as a primitive by [verity](/solean-learn/tooling/verity/)).
+
+Why this is the right boundary: once keccak is a black box with the standard hash assumptions, FORS verification reduces to **structure** — byte-layout parsing, bit-field index extraction, the Merkle climb wiring, root compression, the grinding gate, and address slicing. That's arithmetic and data-flow reasoning, *not* cryptographic-primitive reasoning. It's what makes a real proof feasible on a sane timeline.
+
+## Two routes (recap)
+
+From [the tooling overview](/solean-learn/tooling/):
+
+1. **Reason over the real Yul** under EVMYulLean — highest fidelity to the deployed artifact, hardest.
+2. **Verified reimplementation** in verity, then tie it to the contract via the ABI `recover` + test vectors — and there's [already a FORS model](/solean-learn/tooling/verity/) doing exactly this.
+
+A strong outcome likely **combines** them: build & prove in verity, anchor to reality with EVMYulLean and/or vectors.
+
+## How it composes with SoLean
+
+This is why the task isn't a detour from [SoLean](/solean-learn/tooling/solean/): SoLean proves the wallet safe *under an abstract verifier assumption*; a finished FORS proof **discharges that assumption** with a real verifier. Two layers, one stack.
+
+The honest rough edge: the interfaces don't line up for free. SoLean's oracle is a boolean over `UInt256` words; FORS is `recover(bytes, bytes32) → address` compared against a stored signer. Bridging them (a "recover-and-compare-address" verifier shape) is real work — and itself one of the open threads.
+
+## Check yourself
+
+<Question q="Why is trusting keccak the single thing that makes this task tractable?">
+Because it collapses the hard part. If we had to reason about keccak's internals, we'd be doing deep cryptographic-primitive proofs. Treating it as a black box with standard hash assumptions reduces FORS verification to **structure** — parsing, index extraction, the Merkle climb wiring, root compression, address slicing — which is arithmetic and data-flow reasoning a team can finish on a sane timeline.
+</Question>
+
+<Question q="An attacker cares about spec/completeness or soundness — which, and why?">
+**Soundness.** A soundness bug means `recover` accepts something it shouldn't — i.e. returns the legitimate signer for a *forged* signature. That's a break. A completeness bug only means honest signatures get rejected (annoying, not exploitable). So the proof effort prioritizes "no false accepts."
+</Question>
+
+<Question q="Concretely, how does a finished FORS proof help the SoLean side of the project?">
+It **discharges SoLean's abstract verifier oracle**. Today SoLean proves the wallet safe *assuming* a predicate `Verifier(pk, msg, sig)` works. A verified FORS `recover` is a real instance of that predicate, turning "safe under an abstract verifier assumption" into "safe under a real, verified verifier." Two layers, one stack — see [SoLean](/solean-learn/tooling/solean/).
+</Question>
+
+## Open questions to resolve early
+
+These are decisions/unknowns to settle before sinking weeks in — the live ones live in the [project log](/solean-learn/reference/project-log/):
+
+1. **Which definition of "verify"** does Antonio want — spec-correctness, soundness, or both?
+2. **Which route** — real-Yul (EVMYulLean) vs verity reimplementation vs both?
+3. **Where does our work live** — extend the `fors-verity-model` branch, or model it inside SoLean?
+4. **How far along is the existing verity FORS model**, really? (Read it before committing — this page's contract details are still [pending a source audit](/solean-learn/fors/the-contract/).)
+5. **The composition interface** with SoLean's verifier oracle — what shape lets the FORS proof discharge it?
+
+## Your first contribution
+
+A concrete on-ramp once you've done the tracks:
+
+- Read `ForsVerifier.sol` and confirm/correct the parameters and steps on [FORS, line by line](/solean-learn/fors/the-contract/).
+- Open the verity `Fors/` files and map each to the algorithm steps.
+- Pick one **structural property** from that page (length discipline is the easiest) and trace how the existing model proves it.
+- Log what you find — especially anything that contradicts this guide — in the [project log](/solean-learn/reference/project-log/).

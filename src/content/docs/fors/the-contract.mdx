@@ -1,0 +1,95 @@
+---
+title: FORS, line by line
+description: Mapping the FORS model onto the actual ForsVerifier.sol — parameters, signature layout, the +C grinding twist, and address recovery.
+---
+
+import Question from '../../../components/Question.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" title="Verify against source">
+The parameters and step-by-step below are drawn from an initial reading of the contract, not yet a line-by-line audit of the source. Treat this page as a **map to check against** [`ForsVerifier.sol`](https://github.com/RivaLabs-Core/NiceTry/blob/main/src/Verifiers/ForsVerifier.sol) — confirming each number and step is itself one of the first verification tasks. Fix anything that's off and note it in the [project log](/solean-learn/reference/project-log/).
+</Aside>
+
+## The interface
+
+```solidity
+function recover(bytes calldata sig, bytes32 digest)
+    external pure override returns (address)
+```
+
+Bytes in, address out, **`pure`** (no storage, no side effects). The wallet calls this and checks the returned address against the signer it expects. "Signature valid" becomes "`recover` returns the right address."
+
+## The parameters
+
+| Name | Value | Meaning (from [T3](/solean-learn/fors/)) |
+| --- | --- | --- |
+| `FORS_N` | 16 bytes | hash output is truncated to 16 bytes |
+| `FORS_K` | 26 | number of trees in the forest ($k$) |
+| `FORS_A` | 5 | height of each tree ($a$) → $2^5 = 32$ leaves per tree |
+| signature size | 2448 bytes | fixed — anything else is rejected |
+
+The "+C" in FORS+C is a **counter** / grinding term (next section).
+
+## Signature layout (the 2448 bytes)
+
+The signature is a fixed byte blob, parsed by slicing at fixed offsets — roughly:
+
+- `R` (16 B) — randomizer
+- `pkSeed` (16 B) — public seed feeding the address scheme (ADRS)
+- the per-tree openings — for each *opened* tree, the selected secret leaf value (16 B) + its $a = 5$ auth-path nodes (16 B each) = **96 B per tree**
+- `counter` (16 B) — the grinding counter
+
+The byte count tells a story. The three fixed fields are $3 \times 16 = 48$ B, leaving $2448 - 48 = 2400$ B for openings — i.e. $2400 / 96 = 25 = k - 1$ trees, **not** all $k = 26$. **One tree is omitted** from the signature, a fact tied directly to the recovery-soundness property below. A first concrete property to prove: **a blob that isn't exactly 2448 bytes is rejected.** (The existing verity model already proves this.)
+
+## The algorithm, step by step
+
+1. **Message hash.** Compute
+   $$\text{dVal} = H(\text{pkSeed} \,\|\, R \,\|\, \text{digest} \,\|\, \text{dom}_{\text{FORS}} \,\|\, \text{counter})$$
+   where $H$ is keccak. `dVal` is the bit-source that selects every tree leaf.
+
+2. **Grinding check (the "+C").** A specific $a$-bit field of `dVal` (the $k$-th one) must be **zero**. The signer had to *grind* the `counter` until this held — a small proof-of-work that hardens the few-time scheme. Verification rejects if it's nonzero.
+
+3. **Per-tree climb ($k$ iterations).** For each tree:
+   - extract the leaf index `mdT` from the corresponding $a$ bits of `dVal`;
+   - hash the revealed secret leaf (with an **ADRS** address tweak) into a leaf node;
+   - **unrolled 5-level Merkle climb**: at each level, hash the current node with the auth-path sibling — left/right order chosen by the index bit — until you reach that tree's root.
+
+   The climb is hand-unrolled (no loop) to save gas; functionally it's the Merkle-path check from [T3](/solean-learn/fors/).
+
+4. **Compress roots.** Hash the $k$ roots together (with a `FORS_ROOTS` ADRS) into `pkRoot`.
+
+5. **Recover the address.**
+   $$\text{signer} = H(\text{pad}_{32}(\text{pkSeed}) \,\|\, \text{pad}_{32}(\text{pkRoot}))[12{:}32]$$
+   i.e. keccak the seed and root, take the low 20 bytes as an Ethereum address.
+
+## Properties worth proving (the actual work)
+
+Because keccak is [trusted](/solean-learn/task/), everything here is *structural*. Candidate theorems (some already started in the verity model):
+
+- **Length discipline** — non-2448-byte inputs are rejected.
+- **Parsing correctness** — the offset slicing reconstructs exactly $R$, `pkSeed`, the $k-1$ openings, and `counter`, with no overlap or gap.
+- **Index extraction** — `mdT` for each tree is exactly the right $a$ bits of `dVal`, and is in range $[0, 2^a)$.
+- **Climb correctness** — the unrolled 5-level climb computes the same root as the spec's Merkle-path function.
+- **Grinding gate** — a nonzero $k$-th field forces rejection.
+- **Recovery soundness** — the structural fact already observed in the verity model: *a signature can recover a non-zero signer only when the omitted FORS tree index is forced to zero.* This is the security-relevant shape claim.
+
+These are the threads [T6](/solean-learn/task/) turns into assigned work.
+
+## Check yourself
+
+<Question q="Each opened tree contributes $(1 + a)\times 16 = 96$ B. With a 2448-byte signature and 48 B of fixed fields (`R`, `pkSeed`, `counter`), how many trees are opened — and what does the leftover tell you?">
+$(2448 - 48) / 96 = 2400 / 96 = \mathbf{25}$ opened trees, i.e. $k - 1$ (with $k = 26$). So **one tree is omitted** from the signature. Its index is constrained (forced toward zero) by the grinding/recovery construction — which is the basis of the "recover-a-non-zero-signer only if the omitted index is zero" soundness property. The arithmetic *itself* tells you the scheme doesn't open all 26 trees.
+</Question>
+
+<Question q="Why does the grinding check (a required zero field) run *before* the expensive per-tree climbing in the code?">
+Fail-fast. The grinding gate is a cheap comparison; the unrolled climb over 25 trees is a lot of keccak work (and gas). Rejecting an invalid signature on the cheap check first avoids paying for the climb. It's also simply a validity condition — a nonzero field means the signer didn't do the required grinding, so the signature is invalid regardless.
+</Question>
+
+<Question q="The likeliest place to hide a subtle bug is the left/right ordering in the unrolled climb. Which candidate theorem is designed to catch that?">
+**Climb correctness** — "the unrolled 5-level climb computes the same root as the spec's Merkle-path function." Proving the hand-unrolled code is *equivalent* to a clean reference Merkle-path definition is exactly what catches a swapped `H(a‖b)` vs `H(b‖a)` at some level. You saw this ordering rule in the [worked example](/solean-learn/fors/worked-example/), Step 2.
+</Question>
+
+## Where to read the real thing
+
+- The contract: [`ForsVerifier.sol`](https://github.com/RivaLabs-Core/NiceTry/blob/main/src/Verifiers/ForsVerifier.sol).
+- The existing Lean model of it: the `verity/NiceTry/Fors/` directory on the [`fors-verity-model` branch](https://github.com/RivaLabs-Core/NiceTry/tree/fors-verity-model/verity) — see [T5 · verity](/solean-learn/tooling/verity/).

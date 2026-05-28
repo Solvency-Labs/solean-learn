@@ -1,0 +1,53 @@
+---
+title: SoLean Field Guide
+description: Noob-to-expert path for formally verifying the FORS post-quantum signature verifier on Ethereum, using Lean 4.
+template: splash
+hero:
+  tagline: From "what's a Yul?" to formally verifying a post-quantum signature verifier on Ethereum. A guided path for the whole team.
+  actions:
+    - text: Start here
+      link: /solean-learn/orientation/
+      icon: right-arrow
+    - text: See the stack in one picture
+      link: /solean-learn/orientation/stack-map/
+      icon: information
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+import StackMap from '../../components/StackMap.astro';
+
+## The whole project, in one diagram
+
+Our job is to **formally verify `ForsVerifier.sol`** — the contract in the middle below. Everything else is either the *context* it lives in (the wallet on top) or the *tools* we prove it with (the bottom). Click any layer to jump into the track that teaches it.
+
+<StackMap />
+
+If that diagram looks like alphabet soup right now, that's the point of this site. By the end you'll be able to read every layer — and explain why keccak is the one box we *don't* prove.
+
+## The six tracks
+
+<CardGrid>
+	<Card title="T1 · Ethereum & the EVM" icon="rocket">
+		Accounts, transactions, gas, and the **Yul** intermediate language everything compiles through. [Start →](/solean-learn/ethereum/)
+	</Card>
+	<Card title="T2 · Account Abstraction & PQ" icon="puzzle">
+		ERC-4337 smart wallets, and why post-quantum Ethereum arrives *through* account abstraction. [Start →](/solean-learn/aa-pq/)
+	</Card>
+	<Card title="T3 · Hash-based sigs & FORS" icon="approve-check">
+		Merkle trees, SPHINCS+, and the **FORS** few-time signature our contract checks. [Start →](/solean-learn/fors/)
+	</Card>
+	<Card title="T4 · Lean 4 & verification" icon="seti:lean">
+		What a proof assistant is, and enough Lean 4 to read our models. [Start →](/solean-learn/lean/)
+	</Card>
+	<Card title="T5 · The tooling" icon="setting">
+		EVMYulLean, verity, and SoLean — three tools, one stack. [Start →](/solean-learn/tooling/)
+	</Card>
+	<Card title="T6 · The task" icon="document">
+		What "verify `ForsVerifier.sol`" actually means, and how we'll do it. [Start →](/solean-learn/task/)
+	</Card>
+</CardGrid>
+
+## How to use this guide
+
+You don't have to read top to bottom. The honest dependency order is **T1 → T2 → T3** for the *domain* and **T4 → T5** for the *tooling*; they merge in **T6**. New to everything? Follow [the learning path](/solean-learn/orientation/path/). Just need a word defined? Jump to the [glossary](/solean-learn/reference/glossary/).

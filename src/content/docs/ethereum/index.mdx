@@ -1,0 +1,65 @@
+---
+title: Ethereum in 20 minutes
+description: The minimum mental model of Ethereum you need before reading any contract.
+---
+
+import Question from '../../../components/Question.astro';
+
+You don't need to become an Ethereum developer. You need just enough to read a verifier contract and understand what "deploying" and "calling" it mean.
+
+## The one-sentence model
+
+**Ethereum is a single shared computer whose memory (the "state") everyone agrees on, updated by transactions, where every step costs money (gas).**
+
+## The pieces that matter for us
+
+### Accounts
+
+Two kinds:
+
+- **EOA (externally-owned account)** — controlled by a private key. Today that key is **ECDSA** (secp256k1). This is the thing post-quantum computers eventually break, which is the entire motivation for this project.
+- **Contract account** — controlled by *code*, not a key. It has persistent **storage** and runs its code when called. `ForsVerifier.sol` is a contract account.
+
+### Transactions and calls
+
+A **transaction** is a signed message from an EOA that changes state. It can call a contract function. Contracts can call other contracts. Our verifier is reached by a *call*: the wallet contract calls `recover(...)` on the verifier.
+
+### State, and the three kinds of "memory"
+
+This trips everyone up at first. A contract sees three distinct data areas:
+
+| Area | Lifetime | Cost | In FORS, this holds… |
+| --- | --- | --- | --- |
+| **Storage** | Permanent (on-chain) | Very expensive | the wallet's stored public key / signer |
+| **Memory** | One call, then gone | Cheap | scratch space while hashing up the trees |
+| **Calldata** | Read-only input to the call | Cheapest to read | the 2448-byte signature + the digest |
+
+`recover(bytes calldata sig, bytes32 digest)` — note **`calldata`**. The signature arrives as read-only calldata; the function is `pure` (reads no storage, writes nothing). It's a pure computation: bytes in, address out.
+
+### Gas
+
+Every operation has a price in **gas**; the caller pays. This is why the contract is written the way it is — e.g. it **unrolls** the 5-level tree climb instead of looping, to save gas. Gas is *why the code looks weird*, but for our correctness proof we mostly treat gas as out of scope (we prove *what* it computes, not *how cheaply*).
+
+## Check yourself
+
+<Question q="Which of the three data areas does `recover` read its signature from — storage, memory, or calldata — and why that one?">
+**Calldata.** It's the read-only input to the call and the cheapest area to read. The signature is input the function only reads, never modifies, so calldata is the natural (and gas-cheapest) home — hence the `bytes calldata sig` parameter.
+</Question>
+
+<Question q="`recover` is marked `pure`. What does that tell you it does *not* touch, and why is that convenient for verification?">
+A `pure` function reads no storage and writes nothing — no state at all. It's a plain function from inputs to output (bytes + digest → address). That's convenient because we don't have to model storage or state transitions to reason about it; the theorem is just "given these inputs, the output is correct."
+</Question>
+
+<Question q="Why does an EOA's reliance on ECDSA make this whole project necessary?">
+A quantum computer running Shor's algorithm can recover an ECDSA private key from its public key. Since spending reveals the public key, ECDSA accounts are a long-term quantum risk. The fix is post-quantum signatures — and the practical way to deploy them *today* is an account-abstraction wallet that calls a PQ verifier like FORS. See [T2](/solean-learn/aa-pq/why-pq-needs-aa/).
+</Question>
+
+## What to read next
+
+- **Right here is enough** to start [T3 (FORS)](/solean-learn/fors/) if you're impatient.
+- For the execution model underneath — opcodes, the stack machine, and **Yul** — continue to [The EVM & Yul](/solean-learn/ethereum/evm-and-yul/). You'll need that before the tooling tracks.
+
+### Curated external resources
+
+- **ethereum.org developer docs** — the canonical, friendly intro. Read the "Intro to Ethereum" and "Accounts" pages; skip the dapp tutorials.
+- **[evm.codes](https://www.evm.codes/)** — an interactive opcode reference + playground. Bookmark it; you'll come back when reading Yul.

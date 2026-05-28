@@ -1,0 +1,68 @@
+---
+title: Lean exercises
+description: Reading-and-reasoning exercises with hidden answers, building toward the kind of theorems this project proves.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Question from '../../../components/Question.astro';
+
+Work these *after* [Lean 4 by example](/solean-learn/lean/by-example/). They're about *reading and reasoning*, not memorizing tactics — exactly the skill you need to follow the project's models. Try each before revealing the answer.
+
+<Aside type="tip">
+Best done with Lean open in a browser or editor so you can actually run snippets. The [Lean playground](https://live.lean-lang.org/) needs no install.
+</Aside>
+
+## Warm-up: types and propositions
+
+<Question q="In Lean, what is the difference between `2 + 2 = 4` and `rfl` in the line `def p : 2 + 2 = 4 := rfl`?">
+`2 + 2 = 4` is a **proposition** — a *type* (specifically, of type `Prop`). `rfl` is a **proof** — a *term* of that type. The `def` says "`p` is a proof of `2 + 2 = 4`, and here it is: `rfl`." `rfl` works because both sides reduce to the same value by computation. Proposition = type, proof = term is the core idea.
+</Question>
+
+<Question q="Would `def q : 2 + 2 = 5 := rfl` type-check? What does Lean's response tell you about trust?">
+No — it fails, because `2 + 2` does not reduce to `5`, so `rfl` is not a valid proof. This is the point of a proof assistant: you **cannot** state a false equality and have it accepted. The trust shifts entirely to *whether you stated the theorem you meant* — Lean guarantees the proof, not your intent.
+</Question>
+
+## Reading an inductive
+
+Consider this model fragment:
+
+```lean
+inductive Result where
+  | success (s : Storage)
+  | revert (f : Failure)
+```
+
+<Question q="A function returns a `Result`. You want to prove 'if it returned success, the nonce check passed.' What's the shape of that proof going to involve?">
+A **case split** on the `Result` (`cases`/`rcases`), or pattern-matching on the hypothesis that it equals `.success s`. You assume `h : f x = .success s`, then reason about what must have been true for the `.success` branch to be taken — typically the guards (like the nonce check) appear as conditions on that branch. This "success implies the guards held" shape is the genre of [SoLean's theorems](/solean-learn/tooling/solean/).
+</Question>
+
+## Reasoning about a guard
+
+Imagine `validate` is defined so it returns `.success` only after a `require (op.nonce == s.nonce)`:
+
+```lean
+theorem validate_success_nonce
+    (h : validate env op s = .success s') :
+    op.nonce = s.nonce := by
+  ...
+```
+
+<Question q="Before writing any tactic, state in English why this theorem is *true* given how `validate` is defined.">
+Because the only path to `.success` runs *through* the `require (op.nonce == s.nonce)`. If the nonce didn't match, `validate` would have reverted instead of returning `.success`. So having a proof `h` that it returned `.success` is itself evidence the require passed — from which `op.nonce = s.nonce` follows. The proof unfolds `validate`, splits on the `require`'s condition, and discharges the impossible (reverting) branch using `h`.
+</Question>
+
+## Soundness vs completeness, in Lean shapes
+
+<Question q="Which theorem statement expresses SOUNDNESS of a verifier `recover`, and which expresses COMPLETENESS? (a) `genuineSig sig digest → recover sig digest = signer`  (b) `recover sig digest = signer → genuineSig sig digest`">
+(a) is **completeness**: a genuine signature *implies* acceptance (no false rejects). (b) is **soundness**: acceptance *implies* a genuine signature (no false accepts — you can't forge). For security, **(b)** is the one that matters: it says nothing makes `recover` return the legitimate signer except a real signature. See [what formal verification is](/solean-learn/lean/).
+</Question>
+
+## Stretch: the modeling gap
+
+<Question q="Suppose you prove (b) above about a hand-written Lean model of FORS. An auditor asks: 'does this prove the deployed contract is sound?' What's the honest answer?">
+"It proves the **model** is sound — *if* the model faithfully matches the deployed Yul." That residual is the **modeling gap**. You close it by either (i) reasoning over the real Yul under [EVMYulLean](/solean-learn/tooling/evmyullean/)'s semantics, or (ii) tying a [verity](/solean-learn/tooling/verity/)-compiled artifact to the contract via the ABI `recover` + test vectors. Naming this boundary out loud is exactly the project's [boundary discipline](/solean-learn/tooling/solean/).
+</Question>
+
+## Where to go deeper
+
+These exercises only scratch the surface. To actually learn to *write* proofs, work through "Theorem Proving in Lean 4" and "Mathematics in Lean" (linked from [What formal verification is](/solean-learn/lean/)). Then open the verity `Fors/Proofs/` directory and try to follow one real proof.

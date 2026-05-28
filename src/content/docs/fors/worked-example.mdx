@@ -1,0 +1,120 @@
+---
+title: FORS by hand (worked example)
+description: A complete FORS verification on toy parameters — small enough to do with pencil and paper, structured exactly like the real contract.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+import Question from '../../../components/Question.astro';
+
+The real contract uses $k = 26$ trees of height $a = 5$ — too big to trace by hand. So let's shrink it to **$k = 2$ trees of height $a = 2$** and verify a signature end to end. Every step here has an exact counterpart in [`ForsVerifier.sol`](/solean-learn/fors/the-contract/); only the numbers are smaller.
+
+<Aside type="tip">
+If you can do this toy example, you can read the real verifier. The only differences are bigger loops and ADRS tweaks — not new ideas.
+</Aside>
+
+## The toy parameters
+
+- $k = 2$ trees. Each tree has height $a = 2$, so $2^2 = 4$ leaves (indices `0..3`).
+- We need $k \times a = 4$ bits from the message to pick one leaf per tree.
+- Each tree: leaves `L0..L3`, then `N01 = H(L0‖L1)`, `N23 = H(L2‖L3)`, then root `R = H(N01‖N23)`.
+
+```
+        R = H(N01 ‖ N23)             ← tree root (level 2)
+       /                \
+  N01=H(L0‖L1)      N23=H(L2‖L3)     ← level 1
+    /     \           /     \
+   L0     L1        L2      L3        ← leaves (level 0), Li = H(ski)
+```
+
+## Step 0 — chop the message into leaf indices
+
+Suppose the message-derived bit string (what the contract calls `dVal`) gives us the 4 bits **`1011`**. Split into $k=2$ chunks of $a=2$ bits:
+
+- chunk 0 = `10` (binary) = **2** → in tree 0, the signer reveals leaf **index 2**
+- chunk 1 = `11` (binary) = **3** → in tree 1, the signer reveals leaf **index 3**
+
+<Question q="With a = 2, each chunk is 2 bits. How many bits would one chunk be in the real contract, and how many leaves does that index into?">
+$a = 5$ bits per chunk, indexing into $2^5 = 32$ leaves per tree. There are $k = 26$ such chunks, so the message must supply at least $26 \times 5 = 130$ bits of index material (plus the grinding field).
+</Question>
+
+## Step 1 — what the signature gives us
+
+For each tree the signature reveals **the secret value at the selected leaf** plus the **authentication path** (the siblings needed to climb to the root). It does *not* reveal the other leaves.
+
+- Tree 0 (leaf 2): secret `sk0`, auth path `[L3, N01]`
+- Tree 1 (leaf 3): secret `sk1`, auth path `[L2', N01']`
+
+(Primed names are tree 1's nodes.)
+
+<Question q="A tree of height a = 2 has 4 leaves, but the auth path is only 2 nodes long. Why 2 and not 3?">
+The auth path has exactly **one sibling per level**, and there are $a$ levels above the leaf. Height $a = 2$ → 2 siblings (`L3` at level 0, `N01` at level 1). In the real contract, $a = 5$ → 5 auth-path nodes per tree.
+</Question>
+
+## Step 2 — climb tree 0 to its root
+
+The subtle part: at each level, the **index bit decides left/right ordering** of the hash. Rule: look at the relevant bit of the index; **bit 0 → current node is the LEFT child** (`H(current ‖ sibling)`); **bit 1 → current node is the RIGHT child** (`H(sibling ‖ current)`).
+
+Leaf index 2 = binary `10`.
+
+<Steps>
+
+1. **Leaf node.** `cur = L2 = H(sk0)`.
+
+2. **Level 0.** Lowest index bit of `2` (`10`) is **0** → `L2` is the *left* child. Sibling from auth path is `L3`.
+   `cur = H(L2 ‖ L3) = N23`.
+
+3. **Level 1.** Next index bit (`2 >> 1 = 1`) is **1** → current node is the *right* child. Sibling is `N01`.
+   `cur = H(N01 ‖ N23) = R0`.
+
+</Steps>
+
+So the recomputed root of tree 0 is **`R0 = H(N01 ‖ H(L2 ‖ L3))`** with `L2 = H(sk0)`.
+
+<Question q="At level 0 we computed H(L2 ‖ L3). If the selected index had been 3 (binary 11) instead, what would the level-0 hash be?">
+Index `3` has lowest bit **1**, so the revealed leaf is the *right* child and the sibling sits on the left: `H(sibling ‖ leaf)` = `H(L2 ‖ L3)` — note the revealed value is now on the right. Getting this ordering wrong is a classic verifier bug, which is exactly why it's worth proving the unrolled climb matches the spec.
+</Question>
+
+## Step 3 — climb tree 1 to its root
+
+Leaf index 3 = binary `11`.
+
+<Steps>
+
+1. **Leaf node.** `cur = L3' = H(sk1)`.
+2. **Level 0.** Lowest bit of `3` is **1** → right child. `cur = H(L2' ‖ L3') = N23'`.
+3. **Level 1.** `3 >> 1 = 1`, bit **1** → right child. `cur = H(N01' ‖ N23') = R1`.
+
+</Steps>
+
+Root of tree 1: **`R1 = H(N01' ‖ H(L2' ‖ L3'))`** with `L3' = H(sk1)`.
+
+## Step 4 — compress the roots
+
+Hash all $k$ roots together into the FORS public root (the real contract uses a `FORS_ROOTS` ADRS tweak here):
+
+$$\text{pkRoot} = H(R0 \,\|\, R1)$$
+
+## Step 5 — recover the address
+
+$$\text{signer} = H(\text{pkSeed} \,\|\, \text{pkRoot})\,[12{:}32]$$
+
+i.e. hash the public seed with the FORS root and take the low 20 bytes as an Ethereum address. The wallet compares this against the signer it expects. **Match ⇒ signature accepted.**
+
+## The "+C" grinding gate (why it's there)
+
+The real FORS+C also requires a specific field of `dVal` to be **zero**, forcing the signer to *grind* a counter until the message hash has that shape. That work hardens the *few*-time scheme against an attacker who collects several signatures. In our toy trace we skipped it; in the contract it's a hard `require`-style check that rejects before any climbing if the field is nonzero.
+
+<Question q="The grinding check rejects when a particular field of dVal is nonzero. Is that a soundness property or a completeness property?">
+Both, depending on viewpoint, but the security-relevant framing is **soundness**: it makes valid-looking signatures harder to forge by raising the cost. A bug that *skipped* the check would be a soundness bug (accepts things it shouldn't). A bug that checked the *wrong* field could be a completeness bug (rejects honest signatures). See [soundness vs completeness](/solean-learn/lean/).
+</Question>
+
+## What we just learned (and what to prove)
+
+Everything above is **structure over a hash** — no cryptographic internals of `H` were needed. That's the whole reason [keccak can be trusted](/solean-learn/task/) and the proof can focus on:
+
+- the index chunking (Step 0),
+- the left/right ordering rule (Steps 2–3) — the easiest place to introduce a bug,
+- the auth-path length discipline (Step 1),
+- the root compression and address slicing (Steps 4–5).
+
+Next: see these exact steps in the real code on [FORS, line by line](/solean-learn/fors/the-contract/).

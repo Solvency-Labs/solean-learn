@@ -1,0 +1,143 @@
+/* KaTeX math rendering */
+@import 'katex/dist/katex.min.css';
+
+:root {
+	--sl-content-width: 50rem;
+}
+
+/* Brand accent (cool slate/indigo) */
+:root {
+	--sl-color-accent-low: #1a2740;
+	--sl-color-accent: #3b6ea5;
+	--sl-color-accent-high: #cdddf0;
+}
+:root[data-theme='light'] {
+	--sl-color-accent-low: #d4e2f4;
+	--sl-color-accent: #2f5a86;
+	--sl-color-accent-high: #14253a;
+}
+
+/* ---- Stack map component ---- */
+.stackmap {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	margin: 1.5rem 0 2rem;
+	font-size: var(--sl-text-sm);
+}
+.stackmap__layer {
+	display: block;
+	border: 1px solid var(--sl-color-gray-5);
+	border-radius: 0.6rem;
+	padding: 0.85rem 1.1rem;
+	background: var(--sl-color-black);
+	text-decoration: none;
+	color: inherit;
+	transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.stackmap__layer:hover {
+	border-color: var(--sl-color-accent);
+	transform: translateY(-1px);
+}
+.stackmap__layer--trusted {
+	border-style: dashed;
+	opacity: 0.85;
+}
+.stackmap__layer--task {
+	border-color: var(--sl-color-accent);
+	border-width: 2px;
+}
+.stackmap__title {
+	font-weight: 600;
+	color: var(--sl-color-white);
+}
+.stackmap__sub {
+	color: var(--sl-color-gray-3);
+	font-size: var(--sl-text-xs);
+	margin-top: 0.15rem;
+}
+.stackmap__tag {
+	float: right;
+	font-size: var(--sl-text-xs);
+	color: var(--sl-color-accent-high);
+	border: 1px solid var(--sl-color-gray-5);
+	border-radius: 1rem;
+	padding: 0.05rem 0.55rem;
+	margin-left: 0.5rem;
+}
+.stackmap__edge {
+	align-self: center;
+	color: var(--sl-color-gray-3);
+	font-size: var(--sl-text-xs);
+	padding: 0.35rem 0;
+	font-family: var(--__sl-font-mono);
+}
+
+/* ---- Question / self-check (hidden answer) ---- */
+.qa {
+	border: 1px solid var(--sl-color-gray-5);
+	border-left: 3px solid var(--sl-color-accent);
+	border-radius: 0.5rem;
+	margin: 1rem 0;
+	background: var(--sl-color-gray-7, var(--sl-color-black));
+	overflow: hidden;
+}
+.qa__summary {
+	display: flex;
+	align-items: baseline;
+	gap: 0.6rem;
+	padding: 0.75rem 1rem;
+	cursor: pointer;
+	list-style: none;
+	font-weight: 500;
+}
+.qa__summary::-webkit-details-marker {
+	display: none;
+}
+.qa__badge {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.4rem;
+	height: 1.4rem;
+	border-radius: 50%;
+	background: var(--sl-color-accent);
+	color: var(--sl-color-white);
+	font-size: var(--sl-text-xs);
+	font-weight: 700;
+}
+.qa__q {
+	flex: 1;
+}
+.qa__q code {
+	font-weight: 600;
+}
+.qa__hint {
+	flex: none;
+	font-size: var(--sl-text-xs);
+	color: var(--sl-color-accent-high);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	white-space: nowrap;
+}
+.qa__hint::before {
+	content: '▸ ';
+}
+.qa[open] .qa__hint::before {
+	content: '▾ ';
+}
+.qa[open] .qa__hint {
+	opacity: 0.6;
+}
+.qa__a {
+	padding: 0.25rem 1rem 0.9rem 3rem;
+	border-top: 1px solid var(--sl-color-gray-6);
+	margin-top: 0.1rem;
+}
+.qa__a > :first-child {
+	margin-top: 0.6rem;
+}
+.qa__a > :last-child {
+	margin-bottom: 0;
+}

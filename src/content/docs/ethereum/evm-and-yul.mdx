@@ -1,0 +1,76 @@
+---
+title: The EVM & Yul
+description: The EVM execution model and Yul, the intermediate language our proofs actually target.
+---
+
+import Question from '../../../components/Question.astro';
+
+This is the layer our verification tools live at, so it's worth getting right.
+
+## The EVM is a stack machine
+
+The Ethereum Virtual Machine executes **bytecode** — a flat sequence of one-byte **opcodes** operating on a 256-bit **stack**. `PUSH1 0x40`, `MLOAD`, `ADD`, `KECCAK256`, `SSTORE`, and so on. Everything is 256-bit words (that's why you'll see `uint256` everywhere, and why Solidity packs things into 32-byte words).
+
+You will rarely read raw bytecode. You'll read **Yul**.
+
+## Yul: the intermediate language
+
+Solidity doesn't compile straight to bytecode. It goes:
+
+```
+Solidity  ──(solc)──▶  Yul  ──▶  EVM bytecode
+```
+
+**Yul** is a small, readable, low-level language — think "portable assembly for the EVM." It has functions, variables, `if`/`switch`, loops, and direct memory/storage ops (`mload`, `mstore`, `sload`, `sstore`, `keccak256`). Example:
+
+```yul
+function hash_pair(a, b) -> h {
+    mstore(0x00, a)   // write word a into bytes [0x00, 0x20)
+    mstore(0x20, b)   // write word b into bytes [0x20, 0x40)
+    h := keccak256(/* offset */ 0x00, /* len */ 0x40)   // hash 0x40 = 64 bytes from 0x00 (= a ‖ b)
+}
+```
+
+### Why Yul is *the* layer for us
+
+Two reasons Yul matters more than Solidity for this project:
+
+1. **It's the level our tools speak.** [EVMYulLean](/solean-learn/tooling/evmyullean/) gives semantics for *Yul* (and the EVM). [verity](/solean-learn/tooling/verity/) *compiles to* Yul. So the artifact we reason about is Yul, not Solidity source.
+2. **It's small enough to formalize.** Solidity is a big language with lots of sugar. Yul is tiny — a realistic target for a precise mathematical semantics in Lean.
+
+So when you hear "verify the contract," the concrete object is usually **the Yul** the verifier compiles to (or a Yul model proven to match it), reasoned about under EVMYulLean's semantics.
+
+## Memory in Yul (you'll see this in FORS)
+
+Memory is a byte array, addressed by byte offset, but you read/write a **word** (32 bytes) at a time with `mload`/`mstore`. Hashing two 32-byte values is the `hash_pair` pattern above: store at `0x00` and `0x20`, then `keccak256(0x00, 0x40)` — offset `0x00`, length `0x40` (64 bytes), i.e. both words. The FORS tree climb is this pattern, over and over, up each tree.
+
+## Check yourself
+
+<Question q="Why do we verify at the Yul level instead of the Solidity source?">
+Two reasons. (1) Our tools speak Yul: [EVMYulLean](/solean-learn/tooling/evmyullean/) gives *Yul* semantics and [verity](/solean-learn/tooling/verity/) *compiles to* Yul. (2) Yul is tiny compared to Solidity's many features, so it's a realistic target for a precise mathematical semantics. Solidity source is for humans; Yul is the thing we can pin down formally.
+</Question>
+
+<Question q="In `hash_pair`, why store `a` at `0x00` and `b` at `0x20` specifically (and not, say, `0x00` and `0x10`)?">
+A word is 32 bytes = `0x20`. Storing `a` at `0x00` fills bytes `[0x00, 0x20)`; storing `b` at `0x20` fills `[0x20, 0x40)`. Together they're a contiguous 64-byte (`0x40`) block with no gap or overlap, which is exactly what `keccak256(0x00, 0x40)` then hashes. Using `0x10` would overlap the two words.
+</Question>
+
+<Question q="The keccak256(0x00, 0x40) call never mentions a or b. So what does it actually hash?">
+It hashes a chunk of **memory**, not the variables directly.
+
+`keccak256(offset, length)` reads `length` bytes starting at `offset` and hashes whatever is sitting there. Here that's the 64 bytes (`0x40`) starting at address `0x00`.
+
+And what's in those 64 bytes? Exactly what the two `mstore` lines just wrote: `a` in the first 32 bytes, then `b` in the next 32. So the call hashes `a` immediately followed by `b`.
+
+The takeaway: `a` and `b` are never passed to `keccak256` as arguments — they only get hashed because they were written into that memory region first. (Cryptographers write "`a` followed by `b`" as `a ‖ b`, so this computes `H(a ‖ b)`.)
+</Question>
+
+## What to take away
+
+- Internal links and proofs target **Yul**, not Solidity.
+- Everything is **256-bit words**; byte layout matters intensely (the FORS signature is parsed by slicing a `bytes` blob at fixed offsets).
+- `keccak256(offset, length)` is *the* primitive — and the one we [trust rather than prove](/solean-learn/task/).
+
+### Curated external resources
+
+- **The Solidity docs "Yul" page** — the authoritative spec. Read the intro and the "Specification of Yul" sections; you don't need the optimizer internals.
+- **[evm.codes](https://www.evm.codes/)** — when a Yul opcode confuses you (`mload`, `keccak256`, `calldatacopy`), look it up here and play with it.

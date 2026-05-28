@@ -1,0 +1,20 @@
+---
+// A self-check question with a hidden answer. The prompt stays visible;
+// clicking reveals the slotted answer (which supports full markdown/math).
+//   <Question q="Why is recover marked pure?">It reads no storage…</Question>
+interface Props {
+	q: string;
+}
+const { q } = Astro.props;
+---
+
+<details class="qa">
+	<summary class="qa__summary">
+		<span class="qa__badge">?</span>
+		<span class="qa__q">{q}</span>
+		<span class="qa__hint">show answer</span>
+	</summary>
+	<div class="qa__a">
+		<slot />
+	</div>
+</details>
