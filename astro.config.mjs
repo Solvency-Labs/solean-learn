@@ -10,7 +10,7 @@ import rehypeKatex from 'rehype-katex';
 // custom domain, update both (and the deploy workflow). See README.
 // https://astro.build/config
 export default defineConfig({
-	site: 'https://rperello.github.io',
+	site: 'https://solvency-labs.github.io',
 	base: '/solean-learn',
 	markdown: {
 		// remark-gfm is added explicitly so GFM tables/strikethrough also work in
