@@ -1,0 +1,142 @@
+---
+title: Inductive types & induction
+description: How Lean models data with inductive types, how functions over them use pattern matching, and how proofs over them proceed by case analysis or induction — the single most common shape of real proofs in this project.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+import Question from '../../../components/Question.astro';
+
+If [Curry–Howard](/solean-learn/lean/curry-howard/) was the "click" idea and [tactics](/solean-learn/lean/tactics/) gave you the tool, **inductive types** are the *language* most real proofs are written in. Almost everything the project models — contract data, statements, success/failure results, parse trees — is an inductive type, and almost every project proof is a case-split or induction on one. This page is the bridge.
+
+## What an inductive type is
+
+An **inductive type** is defined by listing its *constructors* — a closed set of ways to build a value of that type. Lean's `Nat` is the canonical example:
+
+```lean
+inductive Nat where
+  | zero
+  | succ (n : Nat)
+```
+
+That declaration says: a `Nat` is *either* `zero`, *or* `succ` of some other `Nat`. Two constructors, period. Every natural number is built by repeatedly applying `succ` to `zero`: `succ zero` (= 1), `succ (succ zero)` (= 2), etc.
+
+The key word is **closed**: there are no other ways to construct a `Nat`. That closedness is what makes proofs by case analysis work — *every* `Nat` is one of the constructor forms, so handling each form handles every value.
+
+## A project-shaped inductive
+
+SoLean models contract statements with one of these:
+
+```lean
+inductive Stmt where
+  | skip   : Stmt
+  | assign : Slot → Expr → Stmt
+  | seq    : Stmt → Stmt → Stmt
+  | require : Cond → Stmt
+```
+
+A `Stmt` is *either* a `skip`, *or* an `assign` of an expression to a storage slot, *or* a `seq` (sequence) of two statements, *or* a `require` (a guard). Four constructors. Anything in the modeled language is built from these four. (Real languages have more — but the *machinery* is identical.)
+
+Two related kinds of definition you'll see alongside:
+
+- **Structures** (one-constructor inductives with named fields), e.g.
+
+  ```lean
+  structure UserOp where
+    opHash : UInt256
+    nonce  : UInt256
+    domain : UInt256
+  ```
+
+  Field access is `op.nonce`. Equivalent to an inductive with a single constructor `mk`.
+
+- **Indexed inductives** — propositions like `Eq` and `Prop`-valued predicates are themselves inductive types under the hood. (`a = a` is the only constructor of `Eq a a`, called `rfl`.) You don't need to think about that explicitly, but it's why `rfl` is special: it's the inductive's only constructor.
+
+## Functions over inductives — pattern matching
+
+Defining a function on an inductive type means handling each constructor:
+
+```lean
+def sizeOf : Stmt → Nat
+  | .skip        => 1
+  | .assign _ _  => 1
+  | .seq s1 s2   => 1 + sizeOf s1 + sizeOf s2
+  | .require _   => 1
+```
+
+The dot-prefix `.skip` means "the `skip` constructor of the expected return type" (Lean infers `Stmt`). The pattern names whatever sub-data the constructor carries — `seq` carries two `Stmt`s, so we bind them as `s1` and `s2` and can recurse.
+
+A function definition that misses a case fails — Lean enforces *exhaustiveness*. Exactly the closedness property again.
+
+## Proving things about inductives — `cases` and `induction`
+
+This is where it all comes together. To prove a proposition about *every* value of an inductive type, you handle each constructor. Lean gives you two tactics:
+
+- **`cases x`** — case-split on the constructors of `x`'s type. One sub-goal per constructor. No induction hypothesis. Use when the property doesn't depend on the *recursive sub-data*.
+- **`induction x`** — same split, but in recursive cases (like `succ k`, or `seq s1 s2`) you *also* get **induction hypotheses** — proofs of the property for the sub-data. Use when the property is recursive.
+
+### A simple example — `cases`
+
+Prove that `sizeOf s > 0` for any `Stmt s`:
+
+```lean
+theorem sizeOf_pos (s : Stmt) : sizeOf s > 0 := by
+  cases s with
+  | skip       => simp [sizeOf]              -- sizeOf .skip = 1, 1 > 0
+  | assign _ _ => simp [sizeOf]              -- same
+  | seq s1 s2  => simp [sizeOf]; omega       -- sizeOf = 1 + ... ; arithmetic
+  | require _  => simp [sizeOf]
+```
+
+`cases s` splits into four sub-goals — one per constructor. Each is closed independently. The shape is *exactly* the shape of the inductive definition. (The `omega` tactic at the end is a built-in arithmetic decision procedure.)
+
+<Question q="`cases s` produced four sub-goals because `Stmt` has four constructors. What would happen if someone later added a fifth constructor to `Stmt` and didn't update the proof?">
+Lean would refuse the proof: the `cases s with | ...` pattern is now non-exhaustive, missing the new constructor. You'd get a clear error pointing at the missing case. This is one of the underrated wins of inductive proofs — *every change to the data forces every proof to either remain compatible or fail loudly*. No silent drift.
+</Question>
+
+### A recursive example — `induction`
+
+To prove `sizeOf` is *bounded by* some function involving its sub-statements, you'd need to know the property for `s1` and `s2` while reasoning about `seq s1 s2`. That's induction:
+
+```lean
+theorem sizeOf_le_double (s : Stmt) : sizeOf s ≤ 2 * sizeOf s := by
+  induction s with
+  | skip       => simp [sizeOf]
+  | assign _ _ => simp [sizeOf]
+  | seq s1 s2 ih1 ih2 =>          -- ih1, ih2 are induction hypotheses
+      simp [sizeOf]; omega
+  | require _  => simp [sizeOf]
+```
+
+In the `seq` branch, `ih1 : sizeOf s1 ≤ 2 * sizeOf s1` and `ih2 : sizeOf s2 ≤ 2 * sizeOf s2` are available because `induction` provided them. That's the only difference from `cases`.
+
+(The lemma itself is trivial — pick something more interesting in practice. The point is the *shape*.)
+
+<Question q="When should you reach for `induction` instead of `cases`?">
+Any time the property you're proving is **about the sub-data of recursive constructors**. If the recursive sub-pieces matter to the proof — and they usually do for non-trivial properties — you need the induction hypotheses that `induction` gives you (and `cases` doesn't). Rule of thumb: if you ever say "and by induction on `s1`, the property holds…" while staring at a `seq s1 s2`, you want `induction`.
+</Question>
+
+## The shape of project proofs
+
+Most theorems in this codebase have this anatomy:
+
+1. **Hypothesize the success outcome of some modeled function** — e.g., `h : validate env op s = .success s'`.
+2. **`cases`** on the function's branches (or `cases h` on the hypothesis) — Lean walks each constructor / each branch.
+3. **Most branches discharge trivially** because they'd have produced `.failure`, contradicting `h`.
+4. **The surviving branch is "what must have been true"** — the guard you wanted to prove.
+
+Reading proofs of this shape is a matter of: identify the inductive being case-split, recognize which branches die immediately, focus on the surviving branch. We walk through a full example end-to-end on the [next page](/solean-learn/lean/a-project-proof/).
+
+<Question q="Why do most branches of a `cases` proof of 'success implies guard held' close 'trivially'?">
+Because the function under analysis is *defined* to take the `.failure` branch when the guard fails. If the hypothesis says `f = .success _`, then in every branch where the function would have returned `.failure`, the hypothesis is *itself* a contradiction (`.success = .failure`), and Lean closes the goal by `contradiction` or `cases` on the impossible equality. Only the branch where the function actually returns `.success` is consistent — and that branch *forces* the guard to have held.
+</Question>
+
+## Two things you'll see in real `.lean` files
+
+- **Anonymous constructors**: `⟨a, b⟩` builds a value of a one-constructor structure (e.g. an `And`). This is the proof shortcut for the `And` row in the [propositions-↔-types table](/solean-learn/lean/curry-howard/).
+- **`rcases` / `obtain`**: smarter versions of `cases` that can destructure deeply nested data in one move. `rcases h with ⟨hp, hq⟩` simultaneously case-splits and binds names to a pair's components.
+
+If those look unfamiliar, mentally read them as "fancier `cases`."
+
+## Where this is heading
+
+[A project-shaped proof](/solean-learn/lean/a-project-proof/) — picks a SoLean-style theorem and walks the *whole thing* end to end (model + statement + tactic proof) so you see the four-step pattern above on concrete code.

@@ -1,0 +1,108 @@
+---
+title: Propositions are types
+description: The single mind-bending idea behind Lean — a proposition is a type whose terms are proofs — and why that's what makes machine-checked proof possible.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Question from '../../../components/Question.astro';
+
+This is the page that, if it clicks, makes everything else in T4 reasonable. It's worth slowing down on.
+
+## What you already know about types
+
+In any typed language you've used, *every value* has a type:
+
+```lean
+def n : Nat := 42        -- n is a Nat
+def msg : String := "hi" -- msg is a String
+def f : Nat → Nat := fun x => x + 1   -- f is a function from Nat to Nat
+```
+
+You read `x : T` as "`x` has type `T`". `n` is one *term* of type `Nat`. There are many other terms of `Nat` — `0`, `1`, `2`, ... — they're the *inhabitants* of the type.
+
+That's the half-step. Now the leap.
+
+## The leap: there's a type whose terms are *proofs*
+
+Lean has a special type called `Prop` — the type of **propositions**. A proposition is a statement that can be true or false (`2 + 2 = 4`, `n > 0`, "this list is sorted", ...). In Lean, every proposition is itself a *type*, and:
+
+> **A proof of proposition `P` is a *term* of type `P`.**
+
+That sentence is the whole Curry–Howard correspondence. Let's make it tangible.
+
+```lean
+def two_plus_two : 2 + 2 = 4 := rfl
+```
+
+Read this exactly as the earlier `def n : Nat := 42`:
+
+- `2 + 2 = 4` is the *type*. (Specifically, a proposition — a type of sort `Prop`.)
+- `rfl` is the *term*. It's a proof.
+- The `def` binds the name `two_plus_two` to that proof.
+
+`rfl` (short for "reflexivity") is a built-in term that proves any equality where both sides reduce to the same value by computation. Since `2 + 2` *does* reduce to `4`, `rfl` is a valid inhabitant of the type `2 + 2 = 4`.
+
+## Why this isn't a gimmick
+
+The payoff is mechanical: **type-checking *is* proof-checking**. If Lean's type checker accepts the term `rfl` as having type `2 + 2 = 4`, that *is* the proof. There's no separate "now verify the proof" pass; it's the same algorithm that checks `42 : Nat`.
+
+That's why you can trust a Lean proof down to the kernel: the question "did the proof work?" reduces to a question Lean already has to answer reliably to do anything at all — "does this term have this type?"
+
+<Aside type="tip" title="The shift in one sentence">
+**To prove `P`, your job is to construct a term of type `P`.** Lean's job is to type-check it.
+</Aside>
+
+<Question q="Would `def q : 2 + 2 = 5 := rfl` type-check? Why or why not, and what does that tell you about what Lean is actually checking?">
+No — it fails. `2 + 2` reduces to `4`, not `5`, so `rfl` is *not* a term of type `2 + 2 = 5`. Lean refuses the definition.
+
+The point: Lean cannot be tricked into accepting a false equality, because it's not "reading" the statement — it's *type-checking* a term against it. You cannot state a falsehood and have it accepted; the worst you can do is fail to find a proof at all.
+</Question>
+
+## The atlas: propositions ↔ types
+
+Once you accept propositions-as-types, every logical connective has a *type-level* counterpart, and proofs become familiar data-construction.
+
+| Logic | As a type in Lean | A proof of it is… |
+| --- | --- | --- |
+| `True` | a type with one trivial inhabitant | `trivial` |
+| `False` | a type with **no inhabitants** | (nothing — you can't construct one without contradiction) |
+| `P ∧ Q` | a pair / product type | `⟨hp, hq⟩` — a proof of `P` *and* a proof of `Q` |
+| `P ∨ Q` | a sum / disjoint union type | `Or.inl hp` *or* `Or.inr hq` |
+| `P → Q` | a function type | a function that turns any proof of `P` into a proof of `Q` |
+| `¬P` (`P → False`) | a function returning `False` | a way to derive a contradiction from `P` |
+| `∀ x : α, P x` | a dependent function type | a function that, for any `x`, produces a proof of `P x` |
+| `∃ x : α, P x` | a dependent pair type | `⟨a, proof_of_P_a⟩` — a witness `a` and a proof that it satisfies `P` |
+
+Look at the `P → Q` line. Functions you already know — `fun x => x + 1`, `Nat → Nat` — are *literally* the same thing as logical implications, when the types involved are propositions:
+
+```lean
+theorem mp (P Q : Prop) (hPQ : P → Q) (hP : P) : Q := hPQ hP
+```
+
+`hPQ : P → Q` is "a proof that P implies Q" *and* also "a function from proofs-of-P to proofs-of-Q". Apply it to `hP : P` (a proof of P), and you get a proof of `Q`. That's modus ponens — and it's just function application.
+
+<Question q="If 'False' is a type with no inhabitants, why does it follow that 'from a proof of False, anything follows' (the principle 'ex falso quodlibet')?">
+Because if you ever have a term `h : False`, you've inhabited an *empty* type — which is impossible under the rules of the type system, **unless** an earlier assumption was itself a contradiction. In that contradictory context, Lean lets you produce a term of *any* type from `h` (the `False.elim` rule). Pragmatically: a proof of `False` proves any proposition, which matches the classical "ex falso" rule.
+
+This is also why **soundness** of the type theory matters — if you could construct `False` from valid inputs, the whole logic would collapse. Lean's kernel is carefully designed so you can't.
+</Question>
+
+## Where the two risks live
+
+This view sharpens what was loose on the previous page. When Lean accepts a proof:
+
+- The **proof gap** is gone — type-checking is exhaustive and mechanical.
+- The **statement gap** remains — Lean checked that your term has the type you claimed, but *did you claim the right type?* `2 + 2 = 4` and "ForsVerifier is sound" are equally types; Lean treats them the same. Whether the latter *means* what you think it means is on you.
+- The **assumption gap** remains — every `axiom` and every hypothesis (`(h : keccak_is_collision_resistant)`) you allowed into the term *is part of the proof object*. Strip them out and the term no longer type-checks. Boundary discipline is just being honest about which hypotheses you appealed to.
+
+That's why "we proved X" is always shorthand for "*under these named assumptions*, we proved X."
+
+## Tactics, foreshadowed
+
+You may have noticed: in `def two_plus_two : 2 + 2 = 4 := rfl` the proof term `rfl` is tiny. For interesting theorems, the proof term might be enormous — too painful to write by hand. The fix is **tactics**: a small imperative language that *builds the proof term for you*, step by step. That's [the next page](/solean-learn/lean/tactics/).
+
+The crucial thing to carry forward: tactics are not a different kind of proof. They're a *way of constructing* the same term-of-type-Prop we just defined directly with `rfl`. Lean still type-checks the result at the end.
+
+<Question q="One sentence: what exactly is Lean's kernel checking when it says 'theorem accepted'?">
+That the proof you supplied — whether written as a literal term or built by tactics — really is a *term* of the *type* you stated. Type-checking *is* proof-checking; there's no separate verification step.
+</Question>

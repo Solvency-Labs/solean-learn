@@ -70,7 +70,10 @@ export default defineConfig({
 					label: 'T4 · Lean 4 & verification',
 					items: [
 						{ label: 'What formal verification is', slug: 'lean' },
-						{ label: 'Lean 4 by example', slug: 'lean/by-example' },
+						{ label: 'Propositions are types', slug: 'lean/curry-howard' },
+						{ label: 'Tactics: building a proof', slug: 'lean/tactics' },
+						{ label: 'Inductive types & induction', slug: 'lean/inductive-types-and-proofs' },
+						{ label: 'A project-shaped proof', slug: 'lean/a-project-proof' },
 						{ label: 'Lean exercises', slug: 'lean/exercises' },
 					],
 				},

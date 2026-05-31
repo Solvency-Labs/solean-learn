@@ -1,0 +1,167 @@
+---
+title: A project-shaped proof
+description: A complete walk-through of a SoLean-style "success implies the guard held" theorem — model, statement, and tactic proof — so you can recognize the pattern when reading the real codebase.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+import Question from '../../../components/Question.astro';
+
+You now have the pieces — [propositions as types](/solean-learn/lean/curry-howard/), [tactics](/solean-learn/lean/tactics/), [inductive types](/solean-learn/lean/inductive-types-and-proofs/). This page glues them together on a real-looking miniature so you can read the shape elsewhere. The example is intentionally small and self-contained; the *pattern* is what generalizes.
+
+## The setup — a tiny validation model
+
+Imagine a wallet that validates a UserOp by checking two guards and bumping a nonce. We model only the essentials:
+
+```lean
+structure UserOp where
+  nonce : Nat
+  domain : Nat
+
+structure Storage where
+  nonce : Nat
+  domain : Nat
+
+inductive Failure where
+  | wrongNonce
+  | wrongDomain
+
+inductive Result where
+  | success (s : Storage)
+  | failure (f : Failure)
+```
+
+A `Storage` knows its current `nonce` and `domain`. A `Result` is either `success` with the new storage, or `failure` with a tagged reason.
+
+The validation function checks the two guards in order and bumps the nonce on success:
+
+```lean
+def validate (op : UserOp) (s : Storage) : Result :=
+  if op.nonce ≠ s.nonce then
+    .failure .wrongNonce
+  else if op.domain ≠ s.domain then
+    .failure .wrongDomain
+  else
+    .success { s with nonce := s.nonce + 1 }
+```
+
+Read it as the imperative pseudocode:
+
+```
+require op.nonce == s.nonce
+require op.domain == s.domain
+s.nonce := s.nonce + 1
+return success(s)
+```
+
+## The theorem — "success implies the guards held"
+
+The contract-level claim we want to make airtight:
+
+> If `validate op s` succeeds, then `op.nonce` matched `s.nonce` *and* `op.domain` matched `s.domain`.
+
+In Lean:
+
+```lean
+theorem validate_success_implies_guards
+    (op : UserOp) (s : Storage) (s' : Storage)
+    (h : validate op s = .success s') :
+    op.nonce = s.nonce ∧ op.domain = s.domain := by
+  -- ... proof to follow
+```
+
+Read the statement carefully:
+
+- **Inputs**: any `op`, any starting `s`, and an `s'` we'll *learn must equal something*.
+- **Hypothesis** `h`: the assumption that `validate` returned success producing `s'`.
+- **Goal**: the conjunction of the two guards.
+
+This is the *genre*: a hypothesis "the function succeeded," a conclusion "every modeled guard must have held." Every project-shaped theorem in SoLean fits this template.
+
+<Question q="The theorem's hypothesis is `validate op s = .success s'`. Why must we take *s'* as a bound variable in the statement, rather than computing it?">
+Because the statement should be true regardless of what `s'` actually is. We're proving a property of *every* successful execution — whatever post-state Lean wound up computing. By taking `s'` as a bound variable plus the equality hypothesis, the theorem captures the universal statement "for any post-state we land on via success, the guards must have held." We can later prove other theorems about *what* `s'` looks like specifically; this one is about *what was true going in*.
+</Question>
+
+## The proof, step by step
+
+```lean
+theorem validate_success_implies_guards
+    (op : UserOp) (s : Storage) (s' : Storage)
+    (h : validate op s = .success s') :
+    op.nonce = s.nonce ∧ op.domain = s.domain := by
+  unfold validate at h         -- (1) expand the definition inside h
+  split at h                   -- (2) case-split on the if/then/else
+  · contradiction              -- (3a) "wrong nonce" branch: h says success = failure, impossible
+  · split at h
+    · contradiction            -- (3b) "wrong domain" branch: same trick
+    · -- (4) the surviving branch: both guards passed
+      refine ⟨?_, ?_⟩          -- split the ∧ goal into two
+      · -- nonce goal
+        by_contra hne          -- assume the equality fails…
+        simp [hne] at h        -- …and derive a contradiction with h
+      · -- domain goal
+        by_contra hne
+        simp [hne] at h
+```
+
+Read it as a story:
+
+<Steps>
+
+1. **Unfold `validate` inside the hypothesis** so Lean can see the nested `if/then/else` structure.
+2. **`split`** does case analysis on the *first* `if`. We get two branches: "nonce wrong" and "nonce OK."
+3. **The "wrong" branches die by contradiction.** In each one, the function would have returned `.failure ...`, but `h` claims it returned `.success s'`. `success ≠ failure`, so `h` is impossible — `contradiction` closes the goal.
+4. **The surviving branch is "both guards passed."** The goal is the conjunction `op.nonce = s.nonce ∧ op.domain = s.domain`. We split it into two sub-goals (`refine ⟨?_, ?_⟩`) and prove each.
+
+</Steps>
+
+For each guard goal, we assume the *negation* (`by_contra hne` gives `hne : op.nonce ≠ s.nonce`) and then `simp [hne] at h` pushes that assumption back through the `validate` definition — which forces `h` into a failure form, contradicting its `.success s'` shape. Lean closes the goal by the contradiction.
+
+The whole proof is the four-step pattern from [the previous page](/solean-learn/lean/inductive-types-and-proofs/): hypothesize success, case-split, kill the failure branches by contradiction, the surviving branch forces the guards.
+
+<Question q="In step 3, why does the tactic `contradiction` close the goal in the failure branches — even though the goal is `op.nonce = s.nonce ∧ op.domain = s.domain`, which has nothing to do with `Failure`?">
+Because **once the hypotheses are inconsistent, any goal follows** (the `False.elim` rule — see [Curry–Howard](/solean-learn/lean/curry-howard/)). In the failure branches, `h` has the shape `.failure _ = .success s'`, which is a contradiction (two distinct constructors of `Result` cannot be equal). `contradiction` searches the hypotheses for that kind of impossibility and uses it to close *whatever* goal is in front of it. The goal's content doesn't matter — what matters is that we're in an unreachable branch.
+</Question>
+
+## What we just proved — and what we didn't
+
+Carefully read the theorem one more time:
+
+> `op.nonce = s.nonce ∧ op.domain = s.domain`
+
+It says: *under the assumption that validation succeeded*, both guards held *at validation time* on the *starting* storage `s`. That's a **contract-level** claim — it's about the model's logic, not about anything cryptographic.
+
+It does **not** say:
+
+- the new storage `s'` is anything specific (that'd be a separate theorem — likely `s'.nonce = s.nonce + 1`).
+- the nonce was incremented (separate).
+- the operation cannot be replayed (a *stronger* corollary that uses this theorem).
+- the cryptography behind whatever bound `op` to `s` is sound (we never modeled cryptography — that's a different layer entirely, where [keccak gets trusted](/solean-learn/task/)).
+
+This is the boundary discipline from [the intro page](/solean-learn/lean/) in concrete form. The proof is small, the claim is small, and *both are stated precisely*.
+
+## How this generalizes
+
+Real SoLean theorems look just like this, scaled up. The `validate` function becomes a longer sequence of guards (caller check, nonce, domain, **verifier oracle**, checked nonce increment). The post-state `s'` carries more fields. The conjunction in the conclusion has more conjuncts. But:
+
+- **The hypothesis shape** is the same: `validate ... = .success s'`.
+- **The proof shape** is the same: case-split the function structure, kill the impossible branches by `contradiction`, the surviving branch forces every guard.
+- **The honest framing** is the same: contract-level under named assumptions.
+
+Once you can read this proof, you can read the project's `AAWallet.validate_success_implies_*` family — the gear ratio is the same, just more teeth.
+
+<Question q="Where does the abstract verifier oracle assumption (the FORS task) plug into a theorem of this shape?">
+At the **verifier guard step**. In the real SoLean wallet, one of the guards on the path to `.success` is something like `if Env.verifier op.publicKey op.opHash op.signature then ... else .failure .verifierRejected`. That `Env.verifier` is an abstract predicate — the **oracle**. The success-implies-guards theorem then concludes "...and `Env.verifier ... = true`" alongside the nonce/domain guards.
+
+A finished FORS proof discharges that oracle — turning "*assuming* the verifier accepts" into "*because the actual FORS verifier accepts*." Same theorem shape, real-cryptography backing. That's how [T6](/solean-learn/task/) and T4 meet.
+</Question>
+
+## What to do with this
+
+Open one of SoLean's existing `*_implies_*` theorems and try to map it onto the four-step pattern. You won't need to follow every tactic — but you should be able to:
+
+- spot the success hypothesis,
+- find the case-split,
+- recognize the impossible branches,
+- and locate the surviving branch where the guards get forced.
+
+If you can do that, you can read the codebase. [Lean exercises](/solean-learn/lean/exercises/) gives you a few warm-ups.

@@ -1,0 +1,140 @@
+---
+title: 'Tactics: building a proof'
+description: How Lean proofs are actually written — the tactic vocabulary, the goal/hypothesis model, and worked examples building real proof terms step by step.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+import Question from '../../../components/Question.astro';
+
+[The previous page](/solean-learn/lean/curry-howard/) said: to prove `P`, construct a term of type `P`. Sometimes that term is one symbol (`rfl`). Most of the time, writing it by hand is impractical. **Tactics** are a small imperative language for building the proof term step by step — and they're how every Lean proof you'll read is actually written.
+
+## The goal–hypothesis model
+
+At every moment inside a proof, the *proof state* is two things:
+
+- **Hypotheses** — proofs you have in scope (`h1 : P`, `h2 : Q → R`, `n : Nat`, …).
+- **Goal** — the proposition you still need to prove (`⊢ P ∧ Q`).
+
+Each tactic does one of:
+
+1. **Closes the goal** ("done") by producing a term of the goal's type.
+2. **Changes the goal** ("rewrite", "simplify").
+3. **Splits into sub-goals** ("case analysis", "show me two things").
+4. **Adds a hypothesis** ("`intro` the antecedent of an implication").
+
+A proof is finished when *every* goal is closed.
+
+The keyword to enter tactic mode is `by`:
+
+```lean
+theorem add_comm_example (a b : Nat) : a + b = b + a := by
+  rw [Nat.add_comm]
+```
+
+Before `by`, Lean has a goal `⊢ a + b = b + a`. `rw [Nat.add_comm]` rewrites the LHS using the known lemma `Nat.add_comm`, the goal becomes `b + a = b + a`, and Lean closes it automatically by reflexivity.
+
+## The essential tactics (the ones you'll see constantly)
+
+You don't need to memorize all of these to *read* proofs. Recognize them.
+
+### Introduce a hypothesis: `intro`
+
+Goal `⊢ P → Q` is "given a proof of `P`, produce a proof of `Q`." `intro h` moves the antecedent into the hypotheses and shifts the goal:
+
+```lean
+theorem id_impl (P : Prop) : P → P := by
+  intro h     -- now we have `h : P` and goal `⊢ P`
+  exact h     -- close the goal with `h`
+```
+
+### Provide a proof term: `exact`
+
+`exact e` closes the goal by giving the term `e` directly. It's the bridge back to "raw term" style.
+
+### Apply a lemma backwards: `apply`
+
+`apply f` says "if my goal matches the *conclusion* of `f`, change the goal to its *premises*." Useful when you know what lemma should finish things but need to discharge its hypotheses first.
+
+```lean
+theorem trans_example (h1 : a = b) (h2 : b = c) : a = c := by
+  apply Eq.trans   -- goal splits into `a = ?` and `? = c`
+  · exact h1
+  · exact h2
+```
+
+### Close by computation: `rfl`
+
+If both sides of an equality reduce to the same value, `rfl` closes it. We saw this in `2 + 2 = 4`.
+
+### Rewrite using an equality: `rw`
+
+`rw [eq]` finds occurrences of the LHS of `eq` in the goal and replaces them with the RHS. `rw [eq1, eq2]` does several in a row. Often closes the goal automatically if the result is `rfl`.
+
+### Simplify: `simp`
+
+`simp` repeatedly rewrites with a curated library of "obviously good" simplification lemmas. The blunt instrument: powerful, fast, sometimes too aggressive. You'll see `simp [extra_lemma]` to add lemmas to its toolkit and `simp only [...]` to restrict it.
+
+### Split by cases: `cases` / `rcases`
+
+When you have a hypothesis or goal involving an inductive type, `cases` splits into one sub-goal per constructor. Essential — covered in detail on the [next page](/solean-learn/lean/inductive-types-and-proofs/).
+
+### Induction: `induction`
+
+`induction n` for `n : Nat` splits into a base case (`n = 0`) and an inductive case (`n + 1`, with an induction hypothesis for `n`). Same idea generalizes to lists and any inductive type.
+
+### From a contradiction: `contradiction` / `exfalso`
+
+If your hypotheses are inconsistent (e.g. you have both `h : P` and `h' : ¬P`), `contradiction` closes any goal. `exfalso` changes the goal to `False` so you can then derive a contradiction yourself.
+
+## A multi-step worked proof
+
+Let's prove a small lemma that needs three different tactics. The proposition: for naturals, if `n ≠ 0` then `n + 1 > 1`.
+
+```lean
+theorem succ_pos_of_ne_zero (n : Nat) (h : n ≠ 0) : n + 1 > 1 := by
+  cases n with               -- split on whether n is 0 or succ
+  | zero =>                  -- case n = 0
+      contradiction          -- h : 0 ≠ 0 is impossible; close any goal
+  | succ k =>                -- case n = k + 1
+      simp [Nat.succ_lt_succ_iff]   -- reduce goal via a known iff
+      exact Nat.succ_pos k   -- close with the lemma that k + 1 > 0
+```
+
+Read it as a *story*:
+
+<Steps>
+
+1. We don't know yet what `n` looks like; case-split.
+2. If `n = 0`, the hypothesis `h : 0 ≠ 0` is a contradiction — done.
+3. If `n = k + 1`, simplify the `>` using a structural lemma, then apply the fact "successor is positive" to close it.
+
+</Steps>
+
+The shape — **case-split, dispatch each case** — is the most common shape of real proofs in this codebase.
+
+<Question q="In the proof above, why is `contradiction` enough on its own to close the n = 0 case — even though the goal is about > , not about False?">
+Because once Lean sees inconsistent hypotheses, it can derive `False`, and from `False` any goal follows (via the `False.elim` rule). `contradiction` searches the hypotheses for an obvious inconsistency and, if found, closes whatever goal you happened to have. It's a shortcut for "this case can't really happen."
+</Question>
+
+## Reading vs writing
+
+Two distinct skills:
+
+- **Reading**: scan the tactics, mentally track what each does to the goal, and recognize the *shape* of the argument (case-split? induction? rewrite chain?). This is what you mostly need for this project.
+- **Writing**: drive the proof yourself, watching the goal state in your editor. The Lean extension shows the live goal after each tactic — indispensable.
+
+If you're learning to write, the trick is to do it interactively in your editor (or the [Lean playground](https://live.lean-lang.org/)) and *read the goal state after every tactic*. The tactics are useless without seeing what they do.
+
+## A tactic is not a different kind of proof
+
+This is worth repeating from [the previous page](/solean-learn/lean/curry-howard/): a tactic block is *not* a magical alternative to writing a proof term. It's a script that *constructs the proof term for you*. At the end, Lean type-checks the resulting term exactly as if you'd written it by hand. The kernel's trust boundary is the same.
+
+That means: a tactic can never make a proof "more true" or "less true." It can only make it more or less tedious to write.
+
+<Question q="Why does Lean's kernel not have to trust tactics like `simp`?">
+Because tactics don't have privileged access to the kernel's "yes/no" answer. They *produce a proof term*, and the kernel type-checks that term afterwards. If a tactic produces a wrong term (a term that doesn't actually have the goal's type), type-checking fails and the proof is rejected. So even buggy tactics can't smuggle through false theorems — the worst they can do is fail to close goals.
+</Question>
+
+## Where this is heading
+
+The single most common pattern in this project's proofs is "**case-split on a constructor, dispatch each branch**" — exactly the move at the heart of the worked example above. That move belongs to **inductive types**, which are how the project models contracts, data, and statements. That's [the next page](/solean-learn/lean/inductive-types-and-proofs/).
