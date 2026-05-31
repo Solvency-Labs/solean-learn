@@ -59,6 +59,9 @@ export default defineConfig({
 					label: 'T3 · Hash-based sigs & FORS',
 					items: [
 						{ label: 'From hashes to signatures', slug: 'fors' },
+						{ label: 'Lamport: a one-time signature', slug: 'fors/lamport' },
+						{ label: 'Many-time from one-time (WOTS+ & Merkle)', slug: 'fors/wots-and-merkle' },
+						{ label: 'FORS: a few-time signature', slug: 'fors/the-scheme' },
 						{ label: 'FORS by hand (worked example)', slug: 'fors/worked-example' },
 						{ label: 'FORS, line by line', slug: 'fors/the-contract' },
 					],

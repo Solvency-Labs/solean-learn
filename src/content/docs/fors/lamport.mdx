@@ -1,0 +1,126 @@
+---
+title: 'Lamport: a one-time signature'
+description: The simplest hash-based signature scheme, walked through with a 4-bit message — and the precise reason it can be used only once.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+import Question from '../../../components/Question.astro';
+
+The simplest hash-based signature was invented by Leslie Lamport in 1979. It uses only one ingredient: a hash function $H$. Once you understand it, every later scheme — WOTS+, Merkle signatures, FORS, SPHINCS+ — is a variation on its single idea.
+
+## The core trick
+
+The whole scheme rests on one observation about hashes:
+
+> Publishing $H(x)$ commits you to $x$ without revealing it. Later showing $x$ "opens" the commitment — anyone can hash and check.
+
+A *signature* will turn this commitment idea around: **the secret key is a bunch of preimages; the public key is their hashes; signing reveals the right preimages depending on the message.** Verifying = hashing the revealed values and checking they match. Forging without the secrets means inverting $H$.
+
+That's the whole idea. The rest is bookkeeping.
+
+## The setup ($n$-bit messages)
+
+Pick the message length in bits $n$. In real Lamport, $n$ would be a hash output size (256+). For a walkthrough we'll use $n = 4$ so the whole scheme fits on a page.
+
+**Secret key**: pick $2n$ random secrets — *two per bit position*, one for "this bit is 0", one for "this bit is 1":
+
+| position $i$ | when $b_i = 0$ | when $b_i = 1$ |
+| --- | --- | --- |
+| 1 | $sk_{1,0}$ | $sk_{1,1}$ |
+| 2 | $sk_{2,0}$ | $sk_{2,1}$ |
+| 3 | $sk_{3,0}$ | $sk_{3,1}$ |
+| 4 | $sk_{4,0}$ | $sk_{4,1}$ |
+
+**Public key**: hash every cell.
+
+| position $i$ | when $b_i = 0$ | when $b_i = 1$ |
+| --- | --- | --- |
+| 1 | $H(sk_{1,0})$ | $H(sk_{1,1})$ |
+| 2 | $H(sk_{2,0})$ | $H(sk_{2,1})$ |
+| 3 | $H(sk_{3,0})$ | $H(sk_{3,1})$ |
+| 4 | $H(sk_{4,0})$ | $H(sk_{4,1})$ |
+
+The public key is a list of $2n$ hashes — $8$ here. Publish it. Keep the secret table to yourself.
+
+<Question q="The public key has 2n hashes for n-bit messages. Why TWO per position instead of one?">
+Because the signer must be able to reveal a valid preimage for *either* value the bit might take. If we only stored $H(sk_i)$ (one secret per bit), we could open it for one value (say $b_i = 1$ → reveal $sk_i$), but there'd be nothing meaningful to reveal for $b_i = 0$. Two secrets per bit lets the signer commit *in advance* to a valid response for every possible message.
+</Question>
+
+## Signing a message
+
+Say the message bits are $m = 1\,0\,1\,0$.
+
+**The rule**: at each position $i$, reveal the secret in the column matching $m_i$.
+
+<Steps>
+
+1. Position 1: $m_1 = 1$, reveal $sk_{1,1}$.
+2. Position 2: $m_2 = 0$, reveal $sk_{2,0}$.
+3. Position 3: $m_3 = 1$, reveal $sk_{3,1}$.
+4. Position 4: $m_4 = 0$, reveal $sk_{4,0}$.
+
+</Steps>
+
+**Signature**: the tuple $\sigma = (sk_{1,1},\ sk_{2,0},\ sk_{3,1},\ sk_{4,0})$.
+
+## Verifying
+
+Anyone with the public key checks: hash each revealed value and confirm it matches the right cell — the column dictated by the *claimed* message bit.
+
+| position | claimed $m_i$ | check |
+| --- | --- | --- |
+| 1 | 1 | $H(sk_{1,1}) \stackrel{?}{=} pk_{1,1}$ |
+| 2 | 0 | $H(sk_{2,0}) \stackrel{?}{=} pk_{2,0}$ |
+| 3 | 1 | $H(sk_{3,1}) \stackrel{?}{=} pk_{3,1}$ |
+| 4 | 0 | $H(sk_{4,0}) \stackrel{?}{=} pk_{4,0}$ |
+
+All four hold ⇒ accept. Any mismatch ⇒ reject.
+
+<Question q="To forge a Lamport signature on a message without knowing the secret key, what would an attacker need to do?">
+For each bit position where they don't already know the right secret, they'd have to **find a preimage of the published hash** — i.e., invert $H$ at $2n$ specific outputs. With a one-way hash like keccak that's infeasible. The scheme's security reduces *exactly* to one-wayness of $H$, no harder assumption needed. (This is why hash-based signatures are the conservative PQ choice.)
+</Question>
+
+## Why one-time only
+
+Lamport is secure to use *once*. Used twice, an attacker can mix-and-match the revealed secrets. The cleanest way to see it is with a worked attack.
+
+Sign $m = 1\,0\,1\,0$ as above — revealing $sk_{1,1}, sk_{2,0}, sk_{3,1}, sk_{4,0}$. Now sign a second message $m' = 0\,1\,1\,0$ — revealing $sk_{1,0}, sk_{2,1}, sk_{3,1}, sk_{4,0}$. Tally up everything an eavesdropper has now learned:
+
+| position $i$ | known after both signatures |
+| --- | --- |
+| 1 | $sk_{1,0}$ **and** $sk_{1,1}$ — *both* secrets known |
+| 2 | $sk_{2,0}$ **and** $sk_{2,1}$ — *both* secrets known |
+| 3 | $sk_{3,1}$ only |
+| 4 | $sk_{4,0}$ only |
+
+For any new message $m''$ whose bits at positions 1 and 2 are *anything*, and which matches both signatures at positions 3 and 4 ($m''_3 = 1$, $m''_4 = 0$), the attacker can already construct a valid Lamport signature *without ever having seen* a signature on $m''$.
+
+**Example forgery.** $m'' = 1\,1\,1\,0$. The attacker assembles $(sk_{1,1}, sk_{2,1}, sk_{3,1}, sk_{4,0})$ — every secret is one they've already learned. The forgery verifies perfectly: it's indistinguishable from a legitimate signature.
+
+So after just *two* signatures, the scheme leaks enough to forge **four** new messages (the four choices at positions 1 and 2). After more signatures it collapses fast.
+
+<Question q="In the worked attack, why does the attacker need m'' to agree with both signed messages at positions 3 and 4 — but not at positions 1 and 2?">
+Because at positions 3 and 4, only *one* of the two secrets has been revealed across both signatures ($sk_{3,1}$ and $sk_{4,0}$). So a forged signature at those positions can only encode the corresponding bit value (1 and 0 respectively). At positions 1 and 2, *both* secrets have been revealed, so the attacker can construct a valid opening for *either* bit value — those positions are fully under their control.
+</Question>
+
+<Aside type="tip" title="A useful mental model">
+A Lamport secret key is a coin you can flip once to one face and reveal — *picking which face* is the signature. Use it twice and the coin's "secret" is gone.
+</Aside>
+
+## Practical sizes
+
+For real-world security ($n = 256$ bits = the hash output size, since you'd sign $H(\text{message})$, not the raw message):
+
+- **Public key**: $2n$ hashes = 512 hash outputs ≈ 16 KB (with 256-bit hashes).
+- **Signature**: $n$ secrets = 256 secrets ≈ 8 KB.
+- **Per signing**: one Lamport keypair can sign *one* message.
+
+Way too big for normal use, and one-time-only is a non-starter on its own. The next page shows the two fixes that make hash-based signatures practical: WOTS+ (more compact one-time) and Merkle-tree-of-OTSs (one-time → many-time).
+
+<Question q="A real Lamport pubkey is around 16 KB. The contract we're verifying has a 2448-byte signature — and authenticates a normal-sized message. What does that mismatch tell you about the scheme it actually uses?">
+The contract can't be plain Lamport — sizes wouldn't fit. The scheme it implements (FORS) compresses the public key dramatically by **putting many secrets under one Merkle root**: the public key shrinks to a *single* hash (the root), and the signature ships just the few "openings" needed (a leaf preimage + the auth path) for the secrets the message picked. That's the trick T3 builds up to — first many-time-from-one-time via Merkle, then FORS as a refined version.
+</Question>
+
+## Where to next
+
+[Many-time from one-time (WOTS+ & Merkle)](/solean-learn/fors/wots-and-merkle/) — two upgrades over plain Lamport: shorter one-time keys via hash chains, and the trick that lifts one-time to many-time using a Merkle tree of OTS public keys.

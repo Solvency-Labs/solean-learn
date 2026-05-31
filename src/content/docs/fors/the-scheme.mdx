@@ -1,0 +1,155 @@
+---
+title: 'FORS: a few-time signature'
+description: The actual FORS scheme — k Merkle trees of height a, message-derived leaf indices, compact verification, and why it's "few-time" not "many-time".
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+import Question from '../../../components/Question.astro';
+
+You've seen [Lamport](/solean-learn/fors/lamport/) (the prototype OTS) and [Merkle-tree-of-OTSs](/solean-learn/fors/wots-and-merkle/) (how to lift one-time to many-time with a single-root public key). **FORS = Forest Of Random Subsets** recombines those ideas into a *few-time* signature, designed to sit at the bottom of SPHINCS+ and signed under our verifier contract.
+
+## The intuition first
+
+Picture a *forest* of $k$ separate Merkle trees, each of height $a$ (so $2^a$ leaves per tree). Every leaf is the hash of one secret value:
+
+```
+        Tree 1              Tree 2     ...    Tree k
+        Root R₁             Root R₂    ...    Root R_k
+       /      \            /      \          /      \
+      ...                  ...                ...
+     /  \     ...         /  \     ...      /  \     ...
+   L_{1,0}  L_{1,1}    L_{2,0}  L_{2,1}   L_{k,0}  L_{k,1}     ← Lᵢⱼ = H(skᵢⱼ)
+   L_{1,2}  L_{1,3}    L_{2,2}  L_{2,3}   ...
+
+                pk = H(R₁ ‖ R₂ ‖ ... ‖ R_k)   ← THE public key (one hash)
+```
+
+To sign a message: derive a message digest, **split it into $k$ chunks of $a$ bits**, and let chunk $t$ pick one leaf in tree $t$. The signer reveals, for each tree, the *one* secret behind the chosen leaf, plus its Merkle auth path. The verifier hashes the secret → leaf, climbs the auth path → root, does this for all $k$ trees, hashes the roots together, and compares to the public key.
+
+That's it. The whole scheme is on this page; the rest is precision.
+
+## The construction in full
+
+### Parameters
+
+- $k$ — number of trees in the forest. (Real contract: $k = 26$.)
+- $a$ — height of each tree → $2^a$ leaves per tree. (Real contract: $a = 5$, so 32 leaves.)
+- $n$ — hash output length (truncated). (Real contract: $n = 16$ bytes.)
+- $H$ — the hash function. (Real contract: keccak-256, output truncated to $n$ bytes.)
+
+### Secret key
+
+A $k \times 2^a$ table of independent random values:
+
+$$
+\{\,sk_{t,j}\;:\; t \in \{1, \ldots, k\},\ j \in \{0, \ldots, 2^a - 1\}\,\}
+$$
+
+For each tree-and-leaf coordinate, one secret. *Total*: $k \cdot 2^a$ secrets — for the contract's parameters, $26 \cdot 32 = 832$ secrets.
+
+<Aside type="note" title="ADRS tweaks">
+Real FORS hashes each secret with an "address" tweak (`ADRS`) so the same hash function can be domain-separated across trees, leaves, and levels. We're omitting `ADRS` for clarity; treat each $H$ as a *correctly domain-separated* call. The contract page covers it.
+</Aside>
+
+### Tree of one tree
+
+Each tree $t$ is a Merkle tree over its $2^a$ leaves:
+
+- **Leaf hashing**: $L_{t,j} = H(sk_{t,j})$ for $j \in [0, 2^a)$.
+- **Internal node**: hash of children, $\mathrm{node}_{\ell+1, j} = H(\mathrm{node}_{\ell, 2j} \,\|\, \mathrm{node}_{\ell, 2j+1})$.
+- **Root**: $R_t$ at level $a$ (the single top node).
+
+### Public key
+
+The $k$ roots compressed into one hash:
+
+$$
+pk = H(R_1 \,\|\, R_2 \,\|\, \cdots \,\|\, R_k)
+$$
+
+**One hash.** That's the dramatic improvement over Lamport's 16 KB.
+
+### Signing a message $m$
+
+<Steps>
+
+1. **Digest**: compute a message digest $d$ — for our contract it's roughly $d = H(\text{pkSeed} \,\|\, R \,\|\, m \,\|\, \text{dom} \,\|\, \text{counter})$, but for *this page* take it as "$k \cdot a$ bits derived from the message and some randomness." (The contract's `R` and `counter` are randomness and grinding; the `+C` page covers them.)
+
+2. **Chop**: split $d$ into $k$ chunks of $a$ bits. Chunk $t$ → integer index $j_t \in [0, 2^a)$. Each tree gets *one* leaf selected.
+
+3. **Reveal**: for each tree $t$, ship
+   - the **secret** $sk_{t, j_t}$, and
+   - the **authentication path** $\mathrm{auth}_t$ — the $a$ sibling hashes needed to climb from leaf $j_t$ to root $R_t$.
+
+</Steps>
+
+**Signature**: $\sigma = \big(\,(sk_{1, j_1},\ \mathrm{auth}_1),\ (sk_{2, j_2},\ \mathrm{auth}_2),\ \ldots,\ (sk_{k, j_k},\ \mathrm{auth}_k)\,\big)$.
+
+**Signature size**: $k \cdot (n + a \cdot n) = k \cdot (1 + a) \cdot n$. For our contract: $26 \cdot 6 \cdot 16 = 2496$ bytes — close to the 2448 we see, with one tree's opening omitted by a clever trick (covered on the [contract page](/solean-learn/fors/the-contract/)).
+
+### Verifying
+
+<Steps>
+
+1. **Re-derive indices** $j_1, \ldots, j_k$ from $m$ + the randomness in the signature.
+2. For each tree $t \in \{1, \ldots, k\}$:
+   - Hash the revealed secret into a leaf: $L_{t, j_t} = H(sk_{t, j_t})$.
+   - Climb the auth path using $L_{t, j_t}$ and $\mathrm{auth}_t$ — at each level, hash with the sibling in the order dictated by the bits of $j_t$ — yielding a candidate root $\widehat{R}_t$.
+3. Compress all candidate roots into $\widehat{pk} = H(\widehat{R}_1 \,\|\, \cdots \,\|\, \widehat{R}_k)$.
+4. **Accept** iff $\widehat{pk} = pk$.
+
+</Steps>
+
+This is exactly what the contract's `recover(sig, digest)` does — except `recover` skips the equality check and instead *outputs an address derived from* $\widehat{pk}$, leaving the comparison to the calling wallet ("the signer is whoever derives this address"). Same logic, swapped output.
+
+<Question q="In one sentence: what does 'a FORS signature' actually contain — and what does it leave secret?">
+It contains, for each of the $k$ trees, **one secret leaf value** (the one whose index the message selected) plus **the $a$ sibling hashes** to climb that one leaf to that tree's root. Everything else — the other $2^a - 1$ secrets per tree, the other internal nodes — stays secret, summarized away by the Merkle root commitment.
+</Question>
+
+## Why "few-time" and not "many-time"
+
+The crisp version of the security story.
+
+Each signature reveals $k$ secret leaves — one per tree, at a *message-determined* index $j_t$ in tree $t$. After $q$ signatures, the attacker has roughly $q$ revealed leaves per tree (some may collide, but assume distinct for the upper bound).
+
+To **forge** a signature on a *new* message $m''$, the attacker derives indices $j''_1, \ldots, j''_k$ from $m''$, and needs every single $j''_t$ to be among the leaves they've already seen revealed in tree $t$.
+
+- Per tree: probability the freshly-derived $j''_t$ is among $q$ previously-revealed indices is about $q / 2^a$.
+- Across all $k$ independent trees: probability all $k$ hit is about
+
+$$
+\Pr[\text{forgery}] \;\approx\; \left(\frac{q}{2^a}\right)^{k}
+$$
+
+For the contract's $k = 26$, $a = 5$: even after $q = 4$ signatures, $(4/32)^{26} = (1/8)^{26} = 2^{-78}$ — negligibly small. But the bound *blows up rapidly* with $q$: it's not safe for thousands of reuses.
+
+Hence **few-time**: a FORS keypair handles a small number of signatures before its security degrades unacceptably.
+
+<Question q="Walk through the (q/2^a)^k bound. Why is it raised to the k-th power, and why does that make a single FORS keypair safe for a handful of signatures but not many?">
+Each of the $k$ trees is an *independent* gate the forger must clear: they need their derived leaf $j''_t$ to already be one of the revealed ones in *that specific* tree. Each gate has probability about $q/2^a$. All $k$ gates being cleared is the *product*, hence the $k$-th power. Because $k$ is large (26 in the contract), the probability is *extremely* small for small $q$ — but it doesn't have to be — it's the ratio $q/2^a$ raised to a big power. As $q$ grows toward $2^a = 32$, the bound rockets up.
+</Question>
+
+## Where FORS fits in SPHINCS+
+
+FORS alone, used for many messages, would eventually break. SPHINCS+ solves that by giving each message a **fresh FORS keypair**:
+
+- There's a huge **hypertree** of WOTS+ keys (many levels). Its single root is the long-term SPHINCS+ public key.
+- For each message: hash the message + randomness to pick an *index* into the bottom of the hypertree. That index identifies one FORS keypair (out of $2^h$ for some large $h$ like 60).
+- That FORS keypair signs the message digest as on this page.
+- The chain of WOTS+ signatures up the hypertree certifies "this FORS public key is the *legitimate* keypair at index $j$" — i.e., binds the FORS key to the long-term SPHINCS+ root.
+
+With $2^{60}$-ish possible FORS keys and the index chosen by hashing, the same FORS keypair is *almost never reused* — keeping the per-keypair "$q$" tiny, where the $(q/2^a)^k$ bound is safe. That's exactly why FORS is *only* few-time-safe and *only* used as the leaf signer in a much larger scheme.
+
+<Question q="If FORS is only few-time, why does using it inside SPHINCS+ end up safe for billions of signatures?">
+Because SPHINCS+ rarely reuses *the same* FORS keypair. The bottom of the hypertree has roughly $2^h$ FORS keypairs (often $h \approx 60$). For each new message, a fresh keypair is chosen by hashing the message and a random salt. So the per-keypair signature count $q$ stays minuscule with overwhelming probability — and few-time safety per keypair becomes many-time safety overall.
+</Question>
+
+## What the contract verifies
+
+Strictly the **FORS verification** for a single keypair: given a signature shaped as above and a message digest, it (re-)derives the indices, recomputes each tree's root from leaf + auth path, compresses the roots, derives an Ethereum address from the result, and returns it. The wallet then compares that address against the signer it expects.
+
+- The contract does **not** implement key generation (signers do that off-chain).
+- The contract does **not** implement the SPHINCS+ hypertree (this is "just FORS"; the hypertree, if any, is elsewhere).
+- The contract **trusts keccak** as a primitive — see the [task page](/solean-learn/task/).
+
+Next: see this exact flow walked through on toy parameters in [FORS by hand](/solean-learn/fors/worked-example/), then mapped to the real Solidity in [FORS, line by line](/solean-learn/fors/the-contract/).

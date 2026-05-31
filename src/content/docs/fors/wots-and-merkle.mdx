@@ -1,0 +1,130 @@
+---
+title: Many-time from one-time (WOTS+ & Merkle)
+description: Two upgrades over plain Lamport — WOTS+ (more compact one-time signatures via hash chains) and the Merkle-tree-of-OTSs trick that turns one-time into many-time.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+import Question from '../../../components/Question.astro';
+
+Plain [Lamport](/solean-learn/fors/lamport/) is a working hash-based signature, but it has two big problems:
+
+1. **Keys and signatures are huge** — kilobytes per signature.
+2. **One-time only** — burns a keypair per signed message.
+
+Two classical upgrades fix each problem. This page walks both — they're the conceptual pieces that FORS recombines.
+
+## Upgrade 1 — WOTS+ (a more compact OTS)
+
+Lamport spends *two* secrets to sign one *bit*. WOTS+ ("Winternitz One-Time Signature, +") trades a small amount of hashing for a much smaller key by signing in **digits** rather than bits, using **hash chains**.
+
+### The chain idea
+
+Pick a small parameter $w$ (the "Winternitz parameter", typically 16 — i.e. each digit is 4 bits). For each digit position, the secret key is *one* value $sk$. Define a chain by repeated hashing:
+
+$$
+sk \;\xrightarrow{H}\; H(sk) \;\xrightarrow{H}\; H^2(sk) \;\xrightarrow{H}\; \cdots \;\xrightarrow{H}\; H^{w-1}(sk)
+$$
+
+The **public key** for this digit is the top of the chain, $pk = H^{w-1}(sk)$.
+
+To **sign a digit** $d \in \{0, 1, \ldots, w-1\}$: reveal $\sigma = H^{d}(sk)$ — i.e., walk $d$ steps from the secret.
+
+To **verify**: hash $\sigma$ the *remaining* $w - 1 - d$ times and check you land on $pk$.
+
+```
+sk → H(sk) → H²(sk) → H³(sk) → ... → H^{w-1}(sk)   = pk
+              ↑                          ↑
+              σ for digit 2              "land here to verify"
+```
+
+<Question q="Why can a WOTS+ signer reveal H^d(sk) but a verifier (or attacker) can't go backwards to recover lower digits?">
+Going *up* the chain means hashing — easy. Going *down* means inverting $H$ — infeasible for a good hash. So a verifier hashes the revealed value the right number of remaining times and lands on the public key; an attacker who sees $H^d(sk)$ can never recover $H^{d-1}(sk)$, $H^{d-2}(sk)$, etc.
+</Question>
+
+### Why a checksum
+
+There's a subtle attack: an attacker who sees $\sigma = H^d(sk)$ for a digit signed as $d$ can trivially produce $\sigma' = H^{d+1}(sk), H^{d+2}(sk), \ldots$ by hashing forward. That means they can forge a signature on any *larger* digit at that position.
+
+WOTS+ blocks this by appending a **checksum** to the message digits — the checksum sums the *complements* $(w - 1 - d_i)$, so increasing any message digit *decreases* the checksum. To forge a higher digit somewhere, you'd need to forge a *lower* digit elsewhere on the checksum — which means hashing *backwards*, which you can't do.
+
+You don't need the exact formula to read FORS; just hold onto: **WOTS+ is one-time, more compact than Lamport, and protected against the "hash-forward" forgery by a checksum**.
+
+### Where WOTS+ shows up
+
+In the full SPHINCS+ scheme, WOTS+ is used at every internal node of a giant hypertree to sign the next level's public key. **FORS doesn't use WOTS+** — it's structurally closer to Lamport (reveal preimages, no chains) — but you'll see WOTS+ referenced in any SPHINCS+ description, so it's worth recognizing.
+
+## Upgrade 2 — Merkle-tree-of-OTSs
+
+The bigger conceptual leap is turning *one-time* into *many-time*. The trick is exactly the Merkle tree you already know — applied to OTS *public keys*.
+
+### The construction
+
+Pick the number of signatures you want to support, $N = 2^h$ (power of two for a tidy tree). Generate $N$ independent OTS keypairs (Lamport or WOTS+):
+
+$$
+(sk^{(1)}, pk^{(1)}),\ (sk^{(2)}, pk^{(2)}),\ \ldots,\ (sk^{(N)}, pk^{(N)})
+$$
+
+Hash each OTS public key to a leaf, and **build one Merkle tree** with them:
+
+```
+                root R                          ← THE many-time public key
+              /         \
+            ...           ...
+          /     \       /     \
+        L₁     L₂     L₃     L₄        ← Lᵢ = H(pk^{(i)})    (i.e. hash of i-th OTS pubkey)
+```
+
+The new **many-time public key** is just $R$ — *one* hash. (Compare to Lamport's 16 KB.) The OTS public keys are no longer published directly; they're committed under $R$ and produced on demand when used.
+
+### Signing the $j$-th message
+
+<Steps>
+
+1. Pick the next-unused index $j$ (signing is stateful — more on that below).
+2. Compute a fresh OTS signature on the message using $sk^{(j)}$.
+3. The full many-time signature is:
+
+   $$\Sigma_j = \big(\;j,\; \sigma_{\text{OTS}},\; pk^{(j)},\; \mathrm{authPath}_j\;\big)$$
+
+   — the index, the OTS signature, the $j$-th OTS public key, and the auth path of leaf $L_j$ in the Merkle tree.
+
+</Steps>
+
+### Verifying
+
+<Steps>
+
+1. Verify the OTS signature $\sigma_{\text{OTS}}$ against the supplied $pk^{(j)}$ (using whichever OTS scheme is in play).
+2. Compute the leaf $L_j = H(pk^{(j)})$.
+3. **Climb the auth path** to recompute the root from $L_j$.
+4. Check the computed root equals the stored many-time public key $R$.
+
+</Steps>
+
+The Merkle step proves "$pk^{(j)}$ really is the $j$-th key committed under $R$ at setup." The OTS step proves "the signer of this message knew the secret behind $pk^{(j)}$." Together: a many-time scheme, with one tiny public key.
+
+<Question q="In Merkle-of-OTSs, why does the signature include both the OTS public key and the auth path? Couldn't we ship just one?">
+Both jobs need it. The **auth path** alone proves $L_j$ is at position $j$ under $R$ — but says nothing about who can sign with it. The **OTS public key** is what the OTS signature is verified against — but on its own there's no reason to trust it. So the auth path proves $pk^{(j)}$ is the *legitimate* $j$-th key (committed at setup), and the OTS signature then proves the signer *owns* that key. Drop either and the chain breaks.
+</Question>
+
+<Question q="The Merkle root R is constant once the tree is built. What does that imply about the maximum number of messages the scheme can sign?">
+At most $N = 2^h$ — the number of leaves. Each leaf is one OTS keypair, and OTSs are spent on first use. To get more, you'd need a *new* tree (a fresh public key) or a hypertree (a tree of trees of …), which is exactly what SPHINCS+ does — many levels of Merkle trees, each WOTS+ key in one tree signing the *public key* of the tree below.
+</Question>
+
+### The statefulness catch (and SPHINCS+'s fix)
+
+Notice the recipe says "pick the next-unused index $j$." That means the signer has to **remember which leaves they've used** — a leaked or forgotten state can lead to OTS reuse, which is catastrophic (the previous page showed why). This is the original *Merkle Signature Scheme* (MSS) and it's *stateful*.
+
+SPHINCS+ removes the statefulness by deriving $j$ deterministically from a long random value and the message — i.e., hashing message-and-context into an index. With a huge tree (a hypertree of $2^{63}$-ish leaves) collisions are astronomically rare in practice, so reuse is bounded with overwhelming probability — *statelessness without sacrificing security*.
+
+<Aside type="tip" title="Mental upgrade summary">
+- **Lamport → WOTS+**: trade hashing for smaller keys/signatures. *Still one-time.*
+- **OTS → Merkle-of-OTSs**: commit $N$ OTS public keys under one root → *many-time* with a tiny public key, at the cost of carrying an auth path per signature. *Stateful unless you derive the index deterministically.*
+</Aside>
+
+## How this sets up FORS
+
+FORS doesn't use chains (so no WOTS+ inside) and isn't really many-time on its own. It sits between Lamport and "many-time": **few-time**. It reuses the *Merkle-tree-of-secrets* idea from this page — but instead of one secret per leaf-as-an-OTS-pubkey, it puts a single secret value per leaf and uses **multiple parallel trees**, with the message picking one leaf per tree.
+
+That's the subject of [the next page](/solean-learn/fors/the-scheme/).

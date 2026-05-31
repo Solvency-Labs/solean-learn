@@ -1,71 +1,55 @@
 ---
 title: From hashes to signatures
-description: Hash functions, Merkle trees, hash-based one-time and few-time signatures, SPHINCS+, and where FORS fits.
+description: The bridge from hash functions + Merkle trees (which you already know) to actually signing a message — the roadmap for the rest of T3.
 ---
 
 import Question from '../../../components/Question.astro';
 
-This track builds up to FORS from first principles. The good news: it's all just **hashing**. No elliptic curves, no lattices, no scary number theory.
+You're comfortable with hash functions and Merkle trees. This track is the bridge to using *just those two ingredients* to sign a message. The first time you see how it works, it's a little surprising — so the rest of T3 walks the path in small steps. This page is the roadmap.
 
-## Step 1 — the only ingredient: a hash function
+## What you already have
 
-A cryptographic hash $H$ maps any input to a fixed-size output (for us, **keccak-256**) and is, informally:
+- **Hash function** $H$ — for us, keccak-256. One-way and collision-resistant. [Trusted as a primitive](/solean-learn/task/) in our proof.
+- **Merkle tree** — commits to many leaves under a single root; an *authentication path* (the siblings up one level at a time) lets you prove a leaf is in the tree without revealing the others.
 
-- **one-way** — given $H(x)$ you can't find $x$;
-- **collision-resistant** — you can't find $x \ne y$ with $H(x) = H(y)$.
+Both will appear constantly. You won't need any new math beyond them.
 
-Hash-based signatures rest on *only* these properties. That's why they're considered the most conservative post-quantum choice — and why, for our proof, [trusting keccak](/solean-learn/task/) is the natural boundary.
+## The big idea (the whole trick in one paragraph)
 
-## Step 2 — Merkle trees (commit to many things with one hash)
+A hash $H(x)$ is a *commitment* to $x$: publish it before $x$ is known, anyone can later check a claimed $x$ by hashing. Hash-based signatures invert that idea into authentication —
 
-A **Merkle tree** hashes a list of leaves up to a single **root**. Each internal node is the hash of its two children:
+> **Public key = a pile of hashes. Secret key = the preimages of those hashes. Signing = revealing some of those preimages — *and which ones you reveal depends on the message*.**
 
-$$\text{node} = H(\text{left} \,\|\, \text{right})$$
+Verifying = hashing the revealed values and checking they line up with the right public-key entries. Forging without the secrets means inverting $H$, which is exactly what one-wayness rules out.
 
-To prove "leaf $i$ is in the tree with root $R$" you reveal the leaf plus the **authentication path**: the sibling hash at each level. The verifier re-hashes up the path and checks it lands on $R$. A tree of height $a$ has $2^a$ leaves and an auth path of $a$ siblings.
+That single principle drives every scheme in T3. They differ only in:
 
-> **This is the engine of the FORS verifier.** "Climb a tree using an auth path and check you reach the expected root" is *the* operation, repeated many times.
+- **how many secrets** the key holds,
+- **how the message picks which to reveal**,
+- **how the public key is compressed** (this is where Merkle trees come in — the public key shrinks to a single root),
+- **how many signatures** you can safely issue before reuse leaks too much.
 
-## Step 3 — a one-time signature (Lamport, the intuition)
-
-To sign with hashes: the **secret key** is a pile of random values; the **public key** is their hashes. A signature *reveals* the secret values selected by the message bits. The verifier hashes the revealed values and checks they match the public key. It's secure **once** — sign twice and you leak enough to forge. Real schemes (WOTS+) optimize this, but the idea is the same: *reveal preimages selected by the message.*
-
-## Step 4 — FORS: a *few*-time signature
-
-**FORS** = **F**orest **O**f **R**andom **S**ubsets. It generalizes the one-time idea to be safely usable a small number of times — exactly what you want for the bottom layer of a larger scheme.
-
-Structure:
-
-- There are $k$ **Merkle trees**, each of height $a$ (so $2^a$ leaves each). That's the "forest."
-- The message digest is chopped into $k$ chunks of $a$ bits. Chunk $i$ selects **one leaf** in tree $i$.
-- The signature reveals, for each tree: the **secret value** at the selected leaf, plus the **authentication path** up to that tree's root.
-- The verifier recomputes each tree's root from (revealed leaf, auth path), then hashes all $k$ roots together into the **FORS public key**.
-
-So verifying a FORS signature is: *for each of the $k$ trees, climb $a$ levels to a root; then compress the $k$ roots into one value.* All keccak.
-
-## Step 5 — SPHINCS+ / SLH-DSA (where FORS lives)
-
-FORS alone is only *few*-time. **SPHINCS+** (standardized by NIST as **SLH-DSA**) wraps FORS in a huge hypertree of one-time/many-time schemes to get a *stateless, many-time* signature. For our task we mostly care about the **FORS layer in isolation**, because that's what `ForsVerifier.sol` implements.
-
-## Check yourself
-
-<Question q="A Merkle tree of height $a$ has how many leaves, and how many nodes are in an authentication path?">
-$2^a$ leaves, and the auth path has exactly $a$ nodes — one sibling per level as you climb from leaf to root. For the real contract ($a = 5$): 32 leaves, 5 auth-path nodes per tree.
+<Question q="Why does 'revealing the preimage of a published hash' constitute proof that you knew the secret?">
+Because one-wayness of $H$ says: given $h$, you cannot produce an $x$ with $H(x) = h$ — *unless* you knew $x$ to begin with. So a verifier seeing $x$ with $H(x) = h$ has effectively seen a proof that the prover either knew $x$ all along, or broke the hash. Under the standard hash assumption, that's "the prover knew $x$." This is the whole core of hash-based signing.
 </Question>
 
-<Question q="Why is FORS only a *few*-time signature, and what makes the full SPHINCS+ scheme safely many-time?">
-Each signature *reveals* the secret leaves selected by the message. Sign too many different messages and you reveal enough secret leaves that an attacker can forge a signature on a new message. SPHINCS+ fixes this by wrapping FORS inside a large hypertree of one-time (WOTS+) and Merkle layers, so each FORS key is only ever used a bounded number of times.
-</Question>
+## The path through T3
 
-<Question q="Verifying a FORS signature touches only the *one selected leaf* of each tree. How does the verifier account for the other (unrevealed) leaves?">
-It doesn't need them. The **authentication path** summarizes the rest of the tree: each sibling hash already commits to an entire subtree of unrevealed leaves. Climbing leaf + auth-path to the root reproduces a value that depends on all leaves, without the verifier ever seeing them. That's the power of a Merkle commitment.
-</Question>
+| Step | Page | What you'll get |
+| --- | --- | --- |
+| 1 | **[Lamport: a one-time signature](/solean-learn/fors/lamport/)** | The simplest scheme: two secrets per message bit, walked through with a 4-bit example. Why it's strictly *one-time* (with a worked attack showing exactly what leaks on reuse). |
+| 2 | **[Many-time from one-time](/solean-learn/fors/wots-and-merkle/)** | Two upgrades: WOTS+ (hash chains → more compact OTS) and the **Merkle-tree-of-OTSs** trick that lifts a one-time scheme to many-time by hashing many OTS public keys under a single root. |
+| 3 | **[FORS: a few-time signature](/solean-learn/fors/the-scheme/)** | The actual FORS scheme in full: $k$ Merkle trees of height $a$; the message digest picks one leaf per tree; the public key compresses all $k$ roots into one hash. Why it's "few-time" with the security bound. |
+| 4 | **[FORS by hand](/solean-learn/fors/worked-example/)** | The verifier traced end-to-end on toy parameters ($k = 2$, $a = 2$) — small enough to do on paper. |
+| 5 | **[FORS, line by line](/solean-learn/fors/the-contract/)** | The same scheme as it appears in `ForsVerifier.sol`: the byte layout (and why the signature is *exactly* 2448 bytes), the `+C` grinding twist, address recovery. |
 
-## Now read the contract
+By the end you should be able to read `ForsVerifier.sol` and explain what each constant ($k = 26$, $a = 5$, $n = 16$) is doing and why every keccak call is there.
 
-With this model, [FORS, line by line](/solean-learn/fors/the-contract/) maps each step above onto the actual parameters and code of `ForsVerifier.sol` — the "+C" grinding twist, the 2448-byte signature layout, and the address recovery at the end.
+## What's out of scope here
+
+We focus on **how a FORS signature is verified** — that's what the contract does, and what we're proving correct. Real PQ deployments (SPHINCS+/SLH-DSA) also include the *signer* side, key generation, and a giant hypertree above FORS; we touch those only enough to motivate FORS's role.
 
 ### Curated external resources
 
-- **The SPHINCS+ / SLH-DSA submission and NIST FIPS 205** — authoritative but heavy. Use them as a *reference* for exact definitions of FORS once you've got the intuition here; don't read cover-to-cover.
-- **Any "Merkle tree" and "hash-based signatures" explainer** — if Step 2–4 felt fast, a visual Merkle-tree walkthrough will cement it before you hit the contract.
+- **The SPHINCS+ submission and NIST FIPS 205 (SLH-DSA)** — authoritative reference. Use as a lookup *after* the T3 pages have given you the intuition; don't read cover-to-cover.
+- **A visual Merkle-tree explainer** of your choice — if your Merkle mental picture is rusty, lock it in before [Lamport](/solean-learn/fors/lamport/), since every later scheme leans on it.
