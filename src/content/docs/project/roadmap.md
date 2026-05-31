@@ -26,14 +26,14 @@ Status legend: ✅ done · 🔄 in progress · 🔜 next · ⏳ later
 - **ByteArray lemma library** (proved): `byteArray_write_append` (one `mstore` = concat), `readWithPadding_exact` (what `keccak256` reads), `two_word_writes`, and **`writeWords32_data`** (the n-word generalization, reusable for every shape).
 - **MachineState bridge** (proved): `mstore_memory`, `address_keccak_input` (EVM execution → exact keccak input bytes).
 - **Address transcript closed end-to-end** (`address_derivation_eq`): EVM keccak-and-mask = the model's `addressFromRoot`. **First shape proved EVM→model.**
+- **Now real-contract-accurate** (`address_derivation_eq_overwrite`): generalized off the empty-memory *template* to **write-over-existing memory** — `byteArray_write_overwrite`, `readWithPadding_prefix`, `address_keccak_input_overwrite`. Matches the actual run: `pkSeed` already sits at `0x00`, a single `mstore(0x20,pkRoot)` overwrites within a populated memory, and `keccak256(0x00,0x40)` still reads `pkSeed ‖ pkRoot`.
 - `Bridge/MemoryLayout.lean` — Class-C layout/non-overlap facts (the contract's `_GUARD`s) (proved).
 - Trust localized to named axioms; everything else checks to Lean's core. See [Workstreams → trust surface](/solean-learn/project/workstreams/#trust-surface).
 
 ## Phase 4 — Remaining shapes + full contract ⏳
-- Apply the address-shape **template** to **hmsg / leaf / node** via `writeWords32_data` + per-shape keccak bridges.
+- Apply the (now real-contract) address-shape proof to **hmsg / leaf / node** — needs an **overwrite n-word variant** of `writeWords32_data` + per-shape keccak bridges.
 - The hard one: **roots** — 27 words *plus* the FORS tree-climb **loop** and ADRS arithmetic.
-- Generalize the empty-memory assumption to **write-over-existing** (the contract reuses the `0x00` region across hashes).
-- Model the **full contract execution** (tree loop, grinding check, raw ABI parse) and compose all shapes into `RefinesModel evmRun`.
+- Model the **full contract execution** (tree loop, grinding check, raw ABI parse), **threading the memory state across the whole run**, and compose all shapes into `RefinesModel evmRun`.
 - **Discharge the 12 `local_obligations`** (flip `.assumed → .proved`).
 
 ## Phase 5 — Trust-surface reduction & upstream ⏳
@@ -46,4 +46,4 @@ Status legend: ✅ done · 🔄 in progress · 🔜 next · ⏳ later
 
 ---
 
-**Now:** Phase 3 is landed (foundation + first shape). The fork to grab next is Phase 4. The intellectually hard step is the **roots loop / full-execution model** — a good candidate for a dedicated focused effort rather than incremental shape work. Claim a workstream on the [Project log](/solean-learn/reference/project-log/).
+**Now:** Phase 3 is landed and the address shape is **real-contract-accurate**, not just a template. Phase 4 is open: the next mechanical step is the **overwrite n-word lemma** → hmsg/leaf/node; the intellectually hard step is the **roots loop / full-execution model** (best as a dedicated focused effort). Claim a workstream on the [Project log](/solean-learn/reference/project-log/).
