@@ -41,6 +41,15 @@ export default defineConfig({
 					],
 				},
 				{
+					label: 'Project',
+					items: [
+						{ label: 'Roadmap', slug: 'project/roadmap' },
+						{ label: 'Workstreams & repos', slug: 'project/workstreams' },
+						{ label: 'Changelog', slug: 'project/changelog' },
+						{ label: 'Project log', slug: 'reference/project-log' },
+					],
+				},
+				{
 					label: 'T1 · Ethereum & the EVM',
 					items: [
 						{ label: 'Ethereum in 20 minutes', slug: 'ethereum' },
