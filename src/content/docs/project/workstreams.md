@@ -67,3 +67,5 @@ Everything checks down to Lean's core (`propext`, `Classical.choice`, `Quot.soun
 - **`uint256_toByteArray_size`** — true & provable, but EVMYulLean's lemma is `private`; tracked until an upstream PR discharges it.
 
 None of these are cryptographic-hardness assumptions.
+
+**Coming with `evmRun`** (the execution core — not yet present): certifying the contract via its Yul IR will add two trusted items — **solc's IR→bytecode codegen** (the IR isn't the deployed bytecode) and the **IR→DSL transcription** of `forsVerifierRuntime`. Both are removable by going to EVMYulLean's EVM *bytecode* semantics, a much larger proof. Flag these in the Antonio review.

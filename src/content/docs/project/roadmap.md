@@ -36,12 +36,13 @@ Status legend: ✅ done · 🔄 in progress · 🔜 next · ⏳ later
 - **Roots buffer setup proved**: full 25-root buffer, indexed `TreeIndex→UInt256` form, memory-size preservation, and the prefix invariant for the first `n ≤ 25` writes.
 - **Roots compression handoffs** up to `compressRoots`/`recoverRoot`; leaf + five-node hash-chain skeleton; typed leaf/node wrappers; raw-signature layout + forced-zero facts.
 
-**Remaining (the execution core — the hard part):**
-- Prove the real EVM `forEach t 25` **loop** maintains the prefix invariant and emits the six per-iteration hash-chain facts (leaf + 5 nodes), with the actual root-slot write at `0x40 + 32·t`.
-- **Thread full EVM state** through hmsg → forced-zero → tree loop → roots compression → address derivation.
-- **ABI/calldata parsing** vs real `recover(bytes,bytes32)` execution.
-- Assemble **`RefinesModel evmRun`**.
-- **Discharge the 12 `local_obligations`** (flip `.assumed → .proved`) and run the deny-obligations build.
+**Remaining (the execution core — the hard part).** Feasibility spike done: lifting `ForsVerifier.sol` into EVMYulLean is **GO** — the contract is `pure` (calldata + memory + keccak only), every builtin it uses plus `switch`/`for` is supported, and it compiles to a **265-line optimized Yul IR** that transcribes into EVMYulLean's elaboration DSL. The concrete path:
+- **Build `forsVerifierRuntime`** — transcribe the deployed Yul IR into EVMYulLean's `<s{…}>`/`<f…>` notation (strip the constructor object, rewrite `memoryguard(x) → x`). *~2–3 days.*
+- **Define `evmRun`** — ABI-encode `recover(bytes,bytes32)` calldata, run `execTopLevel` with fuel, decode the returned address. *~0.5–1 day.*
+- **Prove `RefinesModel evmRun`** *(the long pole — multi-week)*: induct over the fuel-based `forEach t 25` loop, maintaining the prefix invariant + the six per-iteration hash-chain facts (leaf + 5 nodes) + the real root-slot write at `0x40 + 32·t`; thread EVM state through hmsg → forced-zero → loop → compression → address; ABI parse. Each `keccak256` plugs into the proved shape lemmas.
+- **Discharge the 12 `local_obligations`** (flip `.assumed → .proved`) + deny-obligations build.
+
+> **Fidelity note (for the Antonio review).** This certifies *"the Yul IR refines the model."* It will add two trusted items — **solc's IR→bytecode codegen** and the **IR→DSL transcription** — alongside the keccak/memory axioms. Removing the codegen trust means verifying the deployed *bytecode* via EVMYulLean's EVM semantics, a much larger proof.
 
 ## Phase 5 — Trust-surface reduction & upstream ⏳
 - Split `evm_keccak_address` into a keccak-only axiom + a *proved* `encodeTranscript` masking lemma (Gap B).
@@ -53,4 +54,4 @@ Status legend: ✅ done · 🔄 in progress · 🔜 next · ⏳ later
 
 ---
 
-**Now:** Phase 4's **input layer is done — all five shapes' keccak-input bytes are proved**, plus the roots buffer and compression handoffs. What's left is the **execution core**: the real `forEach t 25` tree loop, threading full EVM state end-to-end, ABI parsing, and assembling `RefinesModel evmRun`. That's the intellectually hard, dedicated-effort milestone. Claim a workstream on the [Project log](/solean-learn/reference/project-log/).
+**Now:** Phase 4's **input layer is done — all five shapes' keccak-input bytes are proved**, plus the roots buffer and compression handoffs. The **execution core** is the remaining milestone, and the feasibility spike says **GO**: lift the contract's Yul IR into EVMYulLean (`forsVerifierRuntime`), define `evmRun`, then prove `RefinesModel evmRun` (the multi-week loop-refinement). The next concrete chunk is the **transcription + `evmRun` setup (~3–4 days)** — it turns the proved shape lemmas into plug-ins. **Coordinate ownership** (this overlaps the Codex workstream — one owner for the loop). Claim it on the [Project log](/solean-learn/reference/project-log/).

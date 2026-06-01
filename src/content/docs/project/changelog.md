@@ -5,6 +5,18 @@ description: Dated, team-facing updates — what shipped, what changed, what's n
 
 Bigger-picture than the append-only [Project log](/solean-learn/reference/project-log/) (which is decisions + open questions). This is the "what happened and what it means for you" feed.
 
+## 2026-06-01 — Spike: lifting `ForsVerifier.sol` into EVMYulLean is **GO**
+
+**TL;DR.** We checked whether the *execution core* is even feasible — i.e. can the real contract be represented and run inside EVMYulLean so we can prove `RefinesModel evmRun`. Answer: **yes, no dead-ends.**
+
+**What we found.** EVMYulLean ingests Yul via a compile-time elaboration DSL (`<s{…}>`/`<f…>`), and its own tests embed solc-IR-style Yul — so `forsVerifierRuntime` is built by transcribing solc's Yul IR into that DSL. The contract is `pure` (calldata + memory + keccak only — no storage/`CALL`), every builtin it uses plus `switch`/`for` is supported, and it compiles to a **265-line optimized Yul IR**. The only friction is deployment-layer constructs (`memoryguard`, nested `object`) that don't touch the runtime logic — `memoryguard(x)` transcribes as `x`.
+
+**Estimate.** Transcribe `forsVerifierRuntime` (~2–3d) + define `evmRun` (~0.5–1d) makes the proved shape lemmas plug in; **proving `RefinesModel evmRun` is the multi-week long pole** (induction over the fuel-based tree loop). Obligations are a modest separate track.
+
+**Fidelity (for the Antonio review).** This certifies *"the Yul IR refines the model"* — it adds trust in **solc's IR→bytecode codegen** and the **IR→DSL transcription**. Removing the codegen trust = verifying the deployed bytecode via EVMYulLean's EVM semantics (much bigger).
+
+**What changes for you.** The execution core has a concrete plan and new claimable tasks (see the [roadmap](/solean-learn/project/roadmap/) Phase 4 and the [Project log](/solean-learn/reference/project-log/)). **Coordinate ownership** — this overlaps the Codex workstream; one owner for the loop refinement.
+
 ## 2026-06-01 — All five transcript shapes' input bytes proved + roots buffer
 
 **TL;DR.** The Codex agent took the roots / memory-transcript workstream and closed the **input layer for every shape**. Independently verified: full `lake build`, **zero `sorry`/`admit`** across the Fors tree, axiom audit within the labeled set.
