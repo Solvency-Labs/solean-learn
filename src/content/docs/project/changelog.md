@@ -5,6 +5,16 @@ description: Dated, team-facing updates — what shipped, what changed, what's n
 
 Bigger-picture than the append-only [Project log](/solean-learn/reference/project-log/) (which is decisions + open questions). This is the "what happened and what it means for you" feed.
 
+## 2026-06-01 — All five transcript shapes' input bytes proved + roots buffer
+
+**TL;DR.** The Codex agent took the roots / memory-transcript workstream and closed the **input layer for every shape**. Independently verified: full `lake build`, **zero `sorry`/`admit`** across the Fors tree, axiom audit within the labeled set.
+
+**What's proved.** EVM-execution-→-keccak-input-bytes for **hmsg, leaf, node, address, roots**; the full 25-root buffer setup (indexed form, size preservation, prefix invariant for the first `n ≤ 25` writes); compression handoffs up to `compressRoots`/`recoverRoot`; the leaf + five-node hash-chain skeleton; and the raw-signature layout + forced-zero facts.
+
+**Trust surface (heads-up for the Antonio review).** Now **5 per-shape keccak bridges** (`evm_keccak_address/hmsg/leaf/node/roots`) instead of one — each encoding-guarded, each isolating the opaque keccak step + the masking correspondence (Gap B, splittable later). Plus the 3 `ffi.ByteArray.zeroes` specs and `uint256_toByteArray_size`. No cryptographic-hardness assumptions.
+
+**What's left.** The execution core: the real `forEach t 25` loop maintaining the prefix invariant + emitting the six per-iteration hash-chain facts + the actual root-slot write; full EVM state threading; ABI parsing; `RefinesModel evmRun`; flipping the `local_obligations`. See [PR #1 on the fork](https://github.com/Solvency-Labs/NiceTry/pull/1) and the [roadmap](/solean-learn/project/roadmap/).
+
 ## 2026-06-01 — Address shape now matches the *real* contract
 
 **TL;DR.** The first proved shape (address derivation) was an empty-memory *template*. It's now generalized to **write-over-existing memory**, so it matches how the contract actually runs. Still `sorry`-free; trust surface unchanged.

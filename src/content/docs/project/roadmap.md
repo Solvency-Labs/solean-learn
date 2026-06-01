@@ -30,11 +30,18 @@ Status legend: ✅ done · 🔄 in progress · 🔜 next · ⏳ later
 - `Bridge/MemoryLayout.lean` — Class-C layout/non-overlap facts (the contract's `_GUARD`s) (proved).
 - Trust localized to named axioms; everything else checks to Lean's core. See [Workstreams → trust surface](/solean-learn/project/workstreams/#trust-surface).
 
-## Phase 4 — Remaining shapes + full contract ⏳
-- Apply the (now real-contract) address-shape proof to **hmsg / leaf / node** — needs an **overwrite n-word variant** of `writeWords32_data` + per-shape keccak bridges.
-- The hard one: **roots** — 27 words *plus* the FORS tree-climb **loop** and ADRS arithmetic.
-- Model the **full contract execution** (tree loop, grinding check, raw ABI parse), **threading the memory state across the whole run**, and compose all shapes into `RefinesModel evmRun`.
-- **Discharge the 12 `local_obligations`** (flip `.assumed → .proved`).
+## Phase 4 — Remaining shapes + full contract 🔄
+**Done (the input layer — all shapes):**
+- **Input-byte shapes proved** (EVM execution → exact keccak-input bytes) for **all five transcripts** — hmsg, leaf, node, address, roots — via the overwrite `mstoreWords32At` lift + per-shape keccak bridges.
+- **Roots buffer setup proved**: full 25-root buffer, indexed `TreeIndex→UInt256` form, memory-size preservation, and the prefix invariant for the first `n ≤ 25` writes.
+- **Roots compression handoffs** up to `compressRoots`/`recoverRoot`; leaf + five-node hash-chain skeleton; typed leaf/node wrappers; raw-signature layout + forced-zero facts.
+
+**Remaining (the execution core — the hard part):**
+- Prove the real EVM `forEach t 25` **loop** maintains the prefix invariant and emits the six per-iteration hash-chain facts (leaf + 5 nodes), with the actual root-slot write at `0x40 + 32·t`.
+- **Thread full EVM state** through hmsg → forced-zero → tree loop → roots compression → address derivation.
+- **ABI/calldata parsing** vs real `recover(bytes,bytes32)` execution.
+- Assemble **`RefinesModel evmRun`**.
+- **Discharge the 12 `local_obligations`** (flip `.assumed → .proved`) and run the deny-obligations build.
 
 ## Phase 5 — Trust-surface reduction & upstream ⏳
 - Split `evm_keccak_address` into a keccak-only axiom + a *proved* `encodeTranscript` masking lemma (Gap B).
@@ -46,4 +53,4 @@ Status legend: ✅ done · 🔄 in progress · 🔜 next · ⏳ later
 
 ---
 
-**Now:** Phase 3 is landed and the address shape is **real-contract-accurate**, not just a template. Phase 4 is open: the next mechanical step is the **overwrite n-word lemma** → hmsg/leaf/node; the intellectually hard step is the **roots loop / full-execution model** (best as a dedicated focused effort). Claim a workstream on the [Project log](/solean-learn/reference/project-log/).
+**Now:** Phase 4's **input layer is done — all five shapes' keccak-input bytes are proved**, plus the roots buffer and compression handoffs. What's left is the **execution core**: the real `forEach t 25` tree loop, threading full EVM state end-to-end, ABI parsing, and assembling `RefinesModel evmRun`. That's the intellectually hard, dedicated-effort milestone. Claim a workstream on the [Project log](/solean-learn/reference/project-log/).

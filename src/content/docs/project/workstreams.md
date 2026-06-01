@@ -62,7 +62,7 @@ All proved and building green (see the [roadmap](/solean-learn/project/roadmap/)
 
 Everything checks down to Lean's core (`propext`, `Classical.choice`, `Quot.sound`) **plus** these explicit, labeled assumptions — keep this list short and honest:
 
-- **keccak** — trusted, not proved (kickoff decision). Currently via `evm_keccak_address` (also bundles the 16-byte masking; to be split).
+- **keccak** — trusted, not proved (kickoff decision). Via **5 per-shape bridges** (`evm_keccak_address/hmsg/leaf/node/roots`), each guarded by the byte-encoding hypothesis. They currently also fold in the 16-byte masking (Gap B); a later refinement splits that out into proofs, leaving keccak-only axioms.
 - **`ffi.ByteArray.zeroes` specs** (×3) — total-correctness of the opaque EVM memory-padding primitive.
 - **`uint256_toByteArray_size`** — true & provable, but EVMYulLean's lemma is `private`; tracked until an upstream PR discharges it.
 
