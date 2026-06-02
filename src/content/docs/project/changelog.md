@@ -5,6 +5,16 @@ description: Dated, team-facing updates — what shipped, what changed, what's n
 
 Bigger-picture than the append-only [Project log](/solean-learn/reference/project-log/) (which is decisions + open questions). This is the "what happened and what it means for you" feed.
 
+## 2026-06-02 — The deployed contract now runs inside EVMYulLean; `ForsRefines` stated
+
+**TL;DR.** The execution-core *scaffolding* is built. `ForsVerifier.sol` is transcribed verbatim into EVMYulLean and actually executes there; the single refinement goal `ForsRefines` is stated. All `sorry`-free. What remains is proving it — the FORS tree-loop induction (the multi-week long pole).
+
+**What's built.** `forsVerifierRuntime` — the deployed object (dispatcher + `fun_recover` incl. the tree `for`-loop + `constant_FORS_SIG_LEN`) transcribed byte-faithfully from the optimized Yul IR. `evmRun : RawSig → Digest → Address` — encodes `recover(bytes,bytes32)` calldata, runs it through the interpreter, decodes the returned address. `ForsRefines : Prop = evmRun raw digest = (recoverRaw? raw digest).getD 0` — the one goal the whole Bridge feeds, decomposed in-file into 6 steps consuming the proved shape lemmas.
+
+**Honest finding.** The contract returns **`address(0)`** on a bad/not-grinded signature where the model returns **`none`** — so the refinement uses `.getD 0`, not exact equality (the Oracle sufficiency theorem survives, since it checks `== expectedSigner`, nonzero).
+
+**What changes for you.** The remaining work is now a single, well-scoped target: **prove `ForsRefines`**, i.e. induct over the interpreter running the tree loop 25× (six hash-facts per iteration + the root write), threading EVM state end-to-end. That's the next milestone. (Code on branch `evmrun-runtime` in the fork; WIP, not yet PR'd.)
+
 ## 2026-06-01 — Spike: lifting `ForsVerifier.sol` into EVMYulLean is **GO**
 
 **TL;DR.** We checked whether the *execution core* is even feasible — i.e. can the real contract be represented and run inside EVMYulLean so we can prove `RefinesModel evmRun`. Answer: **yes, no dead-ends.**
