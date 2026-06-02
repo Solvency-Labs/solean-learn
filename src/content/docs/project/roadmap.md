@@ -30,11 +30,20 @@ Status legend: ✅ done · 🔄 in progress · 🔜 next · ⏳ later
 - `Bridge/MemoryLayout.lean` — Class-C layout/non-overlap facts (the contract's `_GUARD`s) (proved).
 - Trust localized to named axioms; everything else checks to Lean's core. See [Workstreams → trust surface](/solean-learn/project/workstreams/#trust-surface).
 
-## Phase 4 — Remaining shapes + full contract ⏳
-- Apply the (now real-contract) address-shape proof to **hmsg / leaf / node** — needs an **overwrite n-word variant** of `writeWords32_data` + per-shape keccak bridges.
-- The hard one: **roots** — 27 words *plus* the FORS tree-climb **loop** and ADRS arithmetic.
-- Model the **full contract execution** (tree loop, grinding check, raw ABI parse), **threading the memory state across the whole run**, and compose all shapes into `RefinesModel evmRun`.
-- **Discharge the 12 `local_obligations`** (flip `.assumed → .proved`).
+## Phase 4 — Remaining shapes + full contract 🔄
+**Done (the input layer — all shapes):**
+- **Input-byte shapes proved** (EVM execution → exact keccak-input bytes) for **all five transcripts** — hmsg, leaf, node, address, roots — via the overwrite `mstoreWords32At` lift + per-shape keccak bridges.
+- **Roots buffer setup proved**: full 25-root buffer, indexed `TreeIndex→UInt256` form, memory-size preservation, and the prefix invariant for the first `n ≤ 25` writes.
+- **Roots compression handoffs** up to `compressRoots`/`recoverRoot`; leaf + five-node hash-chain skeleton; typed leaf/node wrappers; raw-signature layout + forced-zero facts.
+
+**Execution core — scaffolding now built; the proof is the remaining long pole.** The feasibility spike (GO) is realized:
+- ✅ **`forsVerifierRuntime`** — the deployed contract (dispatcher + `fun_recover`, incl. the FORS tree `for`-loop, + `constant_FORS_SIG_LEN`) transcribed **verbatim** from the optimized Yul IR into EVMYulLean's DSL; builds green. *The real contract now lives in Lean.*
+- ✅ **`evmRun : RawSig → Digest → Address`** — encodes `recover(bytes,bytes32)` calldata, runs it through the EVMYulLean interpreter, decodes the returned address word. *The contract actually executes.*
+- ✅ **`ForsRefines` stated** — `evmRun raw digest = (recoverRaw? raw digest).getD 0` (the `none ↔ address(0)` failure convention — the contract returns `address(0)`, not `none`). This is the single goal the whole Bridge feeds, decomposed in-file into 6 steps (ABI parse · hmsg · forced-zero · **tree loop** · roots compression · address) that consume the proved shape lemmas.
+- 🔜 **Prove `ForsRefines`** *(the multi-week long pole)*: induct over the interpreter running the `for`-loop 25×, the six per-iteration hash-chain facts (leaf + 5 nodes) + the root-slot write at `0x40 + 32·t`, threading EVM state end-to-end. The next dedicated milestone.
+- **Discharge the 12 `local_obligations`** (flip `.assumed → .proved`) + deny-obligations build.
+
+> **Fidelity note (for the Antonio review).** This certifies *"the Yul IR refines the model."* It will add two trusted items — **solc's IR→bytecode codegen** and the **IR→DSL transcription** — alongside the keccak/memory axioms. Removing the codegen trust means verifying the deployed *bytecode* via EVMYulLean's EVM semantics, a much larger proof.
 
 ## Phase 5 — Trust-surface reduction & upstream ⏳
 - Split `evm_keccak_address` into a keccak-only axiom + a *proved* `encodeTranscript` masking lemma (Gap B).
@@ -46,4 +55,4 @@ Status legend: ✅ done · 🔄 in progress · 🔜 next · ⏳ later
 
 ---
 
-**Now:** Phase 3 is landed and the address shape is **real-contract-accurate**, not just a template. Phase 4 is open: the next mechanical step is the **overwrite n-word lemma** → hmsg/leaf/node; the intellectually hard step is the **roots loop / full-execution model** (best as a dedicated focused effort). Claim a workstream on the [Project log](/solean-learn/reference/project-log/).
+**Now:** the execution-core **scaffolding is built** — `forsVerifierRuntime` (the deployed contract, verbatim), `evmRun` (it executes in EVMYulLean), and `ForsRefines` (the single refinement goal) all build green and `sorry`-free. The whole Bridge now feeds one target. What's left is **proving `ForsRefines`**, dominated by the **FORS tree-loop induction** — the multi-week long pole and the next dedicated milestone. Good delegation shape: prove iteration 1 as a template, then the induction (one owner). Claim it on the [Project log](/solean-learn/reference/project-log/).

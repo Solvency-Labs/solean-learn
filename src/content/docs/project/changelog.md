@@ -5,6 +5,38 @@ description: Dated, team-facing updates — what shipped, what changed, what's n
 
 Bigger-picture than the append-only [Project log](/solean-learn/reference/project-log/) (which is decisions + open questions). This is the "what happened and what it means for you" feed.
 
+## 2026-06-02 — The deployed contract now runs inside EVMYulLean; `ForsRefines` stated
+
+**TL;DR.** The execution-core *scaffolding* is built. `ForsVerifier.sol` is transcribed verbatim into EVMYulLean and actually executes there; the single refinement goal `ForsRefines` is stated. All `sorry`-free. What remains is proving it — the FORS tree-loop induction (the multi-week long pole).
+
+**What's built.** `forsVerifierRuntime` — the deployed object (dispatcher + `fun_recover` incl. the tree `for`-loop + `constant_FORS_SIG_LEN`) transcribed byte-faithfully from the optimized Yul IR. `evmRun : RawSig → Digest → Address` — encodes `recover(bytes,bytes32)` calldata, runs it through the interpreter, decodes the returned address. `ForsRefines : Prop = evmRun raw digest = (recoverRaw? raw digest).getD 0` — the one goal the whole Bridge feeds, decomposed in-file into 6 steps consuming the proved shape lemmas.
+
+**Honest finding.** The contract returns **`address(0)`** on a bad/not-grinded signature where the model returns **`none`** — so the refinement uses `.getD 0`, not exact equality (the Oracle sufficiency theorem survives, since it checks `== expectedSigner`, nonzero).
+
+**What changes for you.** The remaining work is now a single, well-scoped target: **prove `ForsRefines`**, i.e. induct over the interpreter running the tree loop 25× (six hash-facts per iteration + the root write), threading EVM state end-to-end. That's the next milestone. (Code on branch `evmrun-runtime` in the fork; WIP, not yet PR'd.)
+
+## 2026-06-01 — Spike: lifting `ForsVerifier.sol` into EVMYulLean is **GO**
+
+**TL;DR.** We checked whether the *execution core* is even feasible — i.e. can the real contract be represented and run inside EVMYulLean so we can prove `RefinesModel evmRun`. Answer: **yes, no dead-ends.**
+
+**What we found.** EVMYulLean ingests Yul via a compile-time elaboration DSL (`<s{…}>`/`<f…>`), and its own tests embed solc-IR-style Yul — so `forsVerifierRuntime` is built by transcribing solc's Yul IR into that DSL. The contract is `pure` (calldata + memory + keccak only — no storage/`CALL`), every builtin it uses plus `switch`/`for` is supported, and it compiles to a **265-line optimized Yul IR**. The only friction is deployment-layer constructs (`memoryguard`, nested `object`) that don't touch the runtime logic — `memoryguard(x)` transcribes as `x`.
+
+**Estimate.** Transcribe `forsVerifierRuntime` (~2–3d) + define `evmRun` (~0.5–1d) makes the proved shape lemmas plug in; **proving `RefinesModel evmRun` is the multi-week long pole** (induction over the fuel-based tree loop). Obligations are a modest separate track.
+
+**Fidelity (for the Antonio review).** This certifies *"the Yul IR refines the model"* — it adds trust in **solc's IR→bytecode codegen** and the **IR→DSL transcription**. Removing the codegen trust = verifying the deployed bytecode via EVMYulLean's EVM semantics (much bigger).
+
+**What changes for you.** The execution core has a concrete plan and new claimable tasks (see the [roadmap](/solean-learn/project/roadmap/) Phase 4 and the [Project log](/solean-learn/reference/project-log/)). **Coordinate ownership** — this overlaps the Codex workstream; one owner for the loop refinement.
+
+## 2026-06-01 — All five transcript shapes' input bytes proved + roots buffer
+
+**TL;DR.** The Codex agent took the roots / memory-transcript workstream and closed the **input layer for every shape**. Independently verified: full `lake build`, **zero `sorry`/`admit`** across the Fors tree, axiom audit within the labeled set.
+
+**What's proved.** EVM-execution-→-keccak-input-bytes for **hmsg, leaf, node, address, roots**; the full 25-root buffer setup (indexed form, size preservation, prefix invariant for the first `n ≤ 25` writes); compression handoffs up to `compressRoots`/`recoverRoot`; the leaf + five-node hash-chain skeleton; and the raw-signature layout + forced-zero facts.
+
+**Trust surface (heads-up for the Antonio review).** Now **5 per-shape keccak bridges** (`evm_keccak_address/hmsg/leaf/node/roots`) instead of one — each encoding-guarded, each isolating the opaque keccak step + the masking correspondence (Gap B, splittable later). Plus the 3 `ffi.ByteArray.zeroes` specs and `uint256_toByteArray_size`. No cryptographic-hardness assumptions.
+
+**What's left.** The execution core: the real `forEach t 25` loop maintaining the prefix invariant + emitting the six per-iteration hash-chain facts + the actual root-slot write; full EVM state threading; ABI parsing; `RefinesModel evmRun`; flipping the `local_obligations`. See [PR #1 on the fork](https://github.com/Solvency-Labs/NiceTry/pull/1) and the [roadmap](/solean-learn/project/roadmap/).
+
 ## 2026-06-01 — Address shape now matches the *real* contract
 
 **TL;DR.** The first proved shape (address derivation) was an empty-memory *template*. It's now generalized to **write-over-existing memory**, so it matches how the contract actually runs. Still `sorry`-free; trust surface unchanged.

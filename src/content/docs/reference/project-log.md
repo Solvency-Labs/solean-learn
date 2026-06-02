@@ -9,14 +9,21 @@ A lightweight, append-only record of **decisions** and **open questions**. Newes
 
 These are live. Claim one, resolve it, then move it to "Decisions" with the outcome.
 
-1. **Antonio sign-off** — confirm route B + the proposed "verified" bar (full refinement, no `assumed`, with an explicit keccak + EVM-memory-primitive trusted base). *(pending; drafted)*
-2. **[workstream] hmsg / leaf / node shapes** — apply the `address_derivation_eq` template via `writeWords32_data` + per-shape keccak bridges. *(mechanical; claimable)*
-3. **[workstream] roots shape + full execution** — the FORS tree **loop** + ADRS arithmetic + composing all shapes into `RefinesModel evmRun`. *(the hard core; best as a focused effort)*
-4. **[workstream] write-over-existing memory** — generalize the empty-memory assumption (the contract reuses the `0x00` region across hashes).
-5. **[workstream] Gap-B split** — separate `evm_keccak_address` into a keccak-only axiom + a proved `encodeTranscript` masking lemma.
+1. **Antonio sign-off** — confirm route B + the proposed "verified" bar (full refinement, no `assumed`, explicit keccak + EVM-memory-primitive trusted base; the EVMYulLean route adds solc-codegen + IR-transcription trust). *(pending; drafted)*
+2. **[workstream] Build `forsVerifierRuntime`** — transcribe the deployed Yul IR into EVMYulLean's `<s{…}>`/`<f…>` DSL (strip constructor, `memoryguard(x)→x`). Spike says GO. *(~2–3d; claimable)*
+3. **[workstream] Define `evmRun` + `RefinesModel` decomposition** — calldata/fuel/decode + wire the proved shape lemmas in as the per-step pieces. *(~0.5–1d; follows #2)*
+4. **[workstream] Prove `RefinesModel evmRun`** — induct over the EVM `forEach t 25` loop (prefix invariant + 6 per-iteration hash-chain facts + root-slot write), thread full EVM state, ABI parse. *(the multi-week long pole; **coordinate ownership with Codex**)*
+5. **[workstream] Gap-B split** — separate the keccak bridges into keccak-only axioms + proved `encodeTranscript` masking lemmas.
 6. **[workstream] upstream PR** — de-privatize `toBytes'_le` in EVMYulLean to discharge `uint256_toByteArray_size`.
+7. **[workstream] flip 12 `local_obligations`** — `.assumed → .proved` + deny-obligations build (separate Verity-Yul track).
 
 ## Decisions
+
+### 2026-06-01 — execution-core lift is GO (feasibility spike)
+`ForsVerifier.sol` can be lifted into EVMYulLean: it's `pure`, all its builtins + `switch`/`for` are supported, and it compiles to a 265-line optimized Yul IR that transcribes into EVMYulLean's elaboration DSL. Path: `forsVerifierRuntime` (transcribe IR) → `evmRun` → prove `RefinesModel evmRun` (multi-week loop refinement). Adds solc-codegen + IR-transcription as trusted items. *(Resolves the "is the full-execution model even feasible" unknown.)*
+
+### 2026-06-01 — input layer done for all shapes + write-over-existing
+All five transcripts' keccak-input bytes (hmsg/leaf/node/address/roots), the roots buffer + prefix invariant, and compression handoffs are proved (Codex workstream); the address shape is real-contract-accurate via the write-over-existing-memory lemmas. *(Resolves old "hmsg/leaf/node shapes" + "write-over-existing memory" workstreams.)*
 
 ### 2026-06-01 — route B (certify the hand-written contract)
 We certify the deployed inline-assembly `ForsVerifier.sol` by proving it **refines** a clean Lean model via **EVMYulLean** (not by shipping a verified-by-construction verity Yul replacement). Rationale: it blesses the actual production artifact and is the more useful result; the model already exists, so the marginal work lands on the equivalence itself. *(Resolves old Q2.)*
