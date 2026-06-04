@@ -10,7 +10,7 @@ We started with everyone in the **SoLean** repo. The real verification work has 
 | Repo | Role | Where work happens |
 |---|---|---|
 | **`Solvency-Labs/solean-learn`** (this site) | Team hub — onboarding, [roadmap](/solean-learn/project/roadmap/), [log](/solean-learn/reference/project-log/), [changelog](/solean-learn/project/changelog/). **Single source of truth for plans & status.** | Docs/MDX |
-| **`Solvency-Labs/NiceTry`** (fork of `RivaLabs-Core/NiceTry`) | **The verification work.** The verity FORS model + our EVMYulLean equivalence. | `verity/NiceTry/Fors/` (model) and `verity/NiceTry/Fors/Bridge/` (ours) on branch `fors-verity-model` |
+| **`Solvency-Labs/NiceTry`** (fork of `RivaLabs-Core/NiceTry`) | **The verification work.** The verity FORS model + our EVMYulLean equivalence. | `verity/NiceTry/Fors/` (model) and `verity/NiceTry/Fors/Bridge/` (ours). **Active branch: `evmrun-runtime`** (has the Bridge, `evmRun`, and the interpreter-stepping foundation; `fors-verity-model` is the shape-only base). **Start at `Bridge/PICKUP.md`.** |
 | **`Solvency-Labs/SoLean`** | Methodology + the wallet-layer model. Its `PQVerifierWrapper` oracle is the slot a finished FORS proof discharges. **No longer the main dev locus.** | `SoLean/` |
 | `lfglabs-dev/EVMYulLean`, `Th0rgal/verity` | Upstream deps — real Yul/EVM semantics + the Lean→Yul compiler. | Read; occasional PRs (e.g. de-privatize `toBytes'_le`) |
 
@@ -36,26 +36,34 @@ git -C NiceTry fetch origin && git -C NiceTry merge origin/fors-verity-model
 
 ```bash
 git clone git@github.com:Solvency-Labs/NiceTry.git
-cd NiceTry/verity
+cd NiceTry
+git checkout evmrun-runtime   # the active branch
+cd verity
 lake exe cache get            # mathlib oleans (fast)
-lake build                    # builds the model + Bridge
+lake build NiceTry            # builds the model + Bridge
 
-# build just our bridge modules
+# build just one bridge module
 lake build NiceTry.Fors.Bridge.AddressShape
 ```
 
-Work on a branch, open a PR into `fors-verity-model` on the fork. Keep proofs **`sorry`-free**; if you add an assumption, make it an explicit `axiom` in a labeled section and note it in the [trust surface](#trust-surface).
+> ⚠️ **Always build the named target `NiceTry`.** A bare `lake build` compiles *nothing* (the lakefile has no `@[default_target]`) and still exits 0 — a false green. After touching a proof, also re-run `#print axioms <thm>` to confirm the trust surface is unchanged.
+
+Work on a branch, open a PR into `evmrun-runtime` on the fork. Keep proofs **`sorry`-free**; if you add an assumption, make it an explicit `axiom` in a labeled section and note it in the [trust surface](#trust-surface).
 
 ## What's in `Bridge/` today
 
 All proved and building green (see the [roadmap](/solean-learn/project/roadmap/) for status):
 
+- **`PICKUP.md`** — **start here.** Branch/build gotchas, what's done, and the remaining work split into claimable bricks.
 - `Oracle.lean`, `Equivalence.lean` — SoLean oracle discharge + the refinement-sufficiency theorem.
 - `MemoryLayout.lean` — Class-C layout/non-overlap facts.
 - `ByteArrayLemmas.lean` — the `ByteArray.write`/`readWithPadding` library + `writeWords32_data`.
 - `EvmMemory.lean` — `MachineState.mstore` → keccak-input bytes.
-- `AddressShape.lean` — the address transcript closed EVM→model.
-- `EvmFfiSpec.lean` — the trusted-axiom layer.
+- `AddressShape.lean` — **all five transcript shapes** closed EVM→model (address/hmsg/leaf/node/roots) + the roots→`recoverRoot` handoff skeleton.
+- `EvmFfiSpec.lean` — the trusted-axiom layer (the 9-axiom trust base).
+- **`Refinement.lean`** — reduces `ForsRefines` to three named execution facts (`h_len`/`h_guard`/`h_accept`); zero added trust.
+- **`ForsRuntime.lean`, `EvmRun.lean`** — the deployed contract transcribed to the EVMYulLean DSL + `evmRun` (the interpreter invocation; account-install bug fixed).
+- **`Interp.lean`, `InterpOps.lean`, `InterpState.lean`, `InterpCall.lean`, `InterpEval.lean`** — the interpreter-stepping foundation: reduction lemmas for every construct in the dispatcher + `fun_recover` (control flow, builtins, stateful ops, user-calls/switch, expression composition).
 - `OBLIGATIONS.md`, `CLASS-M.md` — the discharge plan + the three-layer architecture.
 
 ## Trust surface

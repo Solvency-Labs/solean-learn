@@ -22,19 +22,22 @@ Status legend: ✅ done · 🔄 in progress · 🔜 next · ⏳ later
 - `Bridge/Oracle.lean` — the FORS recovery model **discharges SoLean's `Env.verifier` oracle** (proved).
 - `Bridge/Equivalence.lean` — the `RefinesModel` target + **sufficiency theorem** (proved): hitting the EVM↔model refinement discharges everything downstream.
 
-## Phase 3 — EVMYulLean equivalence: byte foundation + first shape 🔄
+## Phase 3 — EVMYulLean equivalence: byte foundation + all shapes ✅
 - **ByteArray lemma library** (proved): `byteArray_write_append` (one `mstore` = concat), `readWithPadding_exact` (what `keccak256` reads), `two_word_writes`, and **`writeWords32_data`** (the n-word generalization, reusable for every shape).
 - **MachineState bridge** (proved): `mstore_memory`, `address_keccak_input` (EVM execution → exact keccak input bytes).
-- **Address transcript closed end-to-end** (`address_derivation_eq`): EVM keccak-and-mask = the model's `addressFromRoot`. **First shape proved EVM→model.**
-- **Now real-contract-accurate** (`address_derivation_eq_overwrite`): generalized off the empty-memory *template* to **write-over-existing memory** — `byteArray_write_overwrite`, `readWithPadding_prefix`, `address_keccak_input_overwrite`. Matches the actual run: `pkSeed` already sits at `0x00`, a single `mstore(0x20,pkRoot)` overwrites within a populated memory, and `keccak256(0x00,0x40)` still reads `pkSeed ‖ pkRoot`.
+- **All five transcript shapes closed EVM→model**, real-contract-accurate (write-over-existing-memory): `address`, `hmsg`, `leaf`, `node` (with even/odd `climbLevel` sibling ordering), and the `roots`-compression input — each `*_derivation_eq_overwrite` ties the EVM keccak-and-mask to the model hash via a labeled `evm_keccak_*` axiom.
+- **Roots → `recoverRoot` handoff skeleton** (proved): `roots_derivation_eq_recoverRoot_of_hash_chains_after_loop_buffer_init` — once the tree loop supplies the six per-tree hash results, the final compression already refines `recoverRoot`.
 - `Bridge/MemoryLayout.lean` — Class-C layout/non-overlap facts (the contract's `_GUARD`s) (proved).
-- Trust localized to named axioms; everything else checks to Lean's core. See [Workstreams → trust surface](/solean-learn/project/workstreams/#trust-surface).
+- Trust localized to **9 named axioms** (5 `evm_keccak_*` + 4 FFI/word specs); everything else checks to Lean's core. See [Workstreams → trust surface](/solean-learn/project/workstreams/#trust-surface).
 
-## Phase 4 — Remaining shapes + full contract ⏳
-- Apply the (now real-contract) address-shape proof to **hmsg / leaf / node** — needs an **overwrite n-word variant** of `writeWords32_data` + per-shape keccak bridges.
-- The hard one: **roots** — 27 words *plus* the FORS tree-climb **loop** and ADRS arithmetic.
-- Model the **full contract execution** (tree loop, grinding check, raw ABI parse), **threading the memory state across the whole run**, and compose all shapes into `RefinesModel evmRun`.
-- **Discharge the 12 `local_obligations`** (flip `.assumed → .proved`).
+## Phase 4 — Full-contract execution: `RefinesModel evmRun` 🔄
+The shapes prove "each hash step is the right one." Phase 4 connects them to the **real interpreter running `ForsVerifier.sol`**.
+- ✅ **`evmRun` built — and a vacuity bug caught & fixed.** It was running the dispatcher on an empty account map, so the `recover` call hit `MissingContract` and `evmRun ≡ 0` for every input (would have made the goal *false*). Fixed by installing the contract at `codeOwner`.
+- ✅ **Refinement spine** (`Bridge/Refinement.lean`): `forsRefines_of_branches` reduces `ForsRefines` to three named interpreter facts — `h_len` / `h_guard` (reject paths → `address(0)`) and `h_accept` (the recovery happy path). Zero added trust.
+- ✅ **Complete interpreter-stepping foundation**: every construct in the dispatcher + `fun_recover` has a `sorry`-free reduction lemma — control flow, all 14 pure builtins, the 7 stateful ops (`calldataload`/`mstore`/`keccak256`/`return`/`revert`/…), user-`call`/`switch`, and nested-expression composition (`Bridge/Interp*.lean`).
+- 🔜 **`calldataload` byte-reasoning library** → assembles `h_len` / `h_guard` (the ABI reject paths): `readBytes` over `copySlice`+`ffi.zeroes`, a 32-byte word round-trip, and extraction over `encodeForsCalldata`'s layout.
+- ⏳ **The FORS tree-climb loop** (the intellectually hard core) → discharges `h_accept` by feeding the proved roots-handoff skeleton; induction over the 25-tree `for`-loop threading machine state.
+- ⏳ **Discharge the 12 `local_obligations`** (flip `.assumed → .proved`).
 
 ## Phase 5 — Trust-surface reduction & upstream ⏳
 - Split `evm_keccak_address` into a keccak-only axiom + a *proved* `encodeTranscript` masking lemma (Gap B).
@@ -46,4 +49,4 @@ Status legend: ✅ done · 🔄 in progress · 🔜 next · ⏳ later
 
 ---
 
-**Now:** Phase 3 is landed and the address shape is **real-contract-accurate**, not just a template. Phase 4 is open: the next mechanical step is the **overwrite n-word lemma** → hmsg/leaf/node; the intellectually hard step is the **roots loop / full-execution model** (best as a dedicated focused effort). Claim a workstream on the [Project log](/solean-learn/reference/project-log/).
+**Now:** Phase 3 is fully landed (all five shapes proved EVM→model). Phase 4 is underway: `evmRun` runs the real contract (after a vacuity bug fix), the goal is reduced to three named facts, and the **entire interpreter-stepping toolkit is built**. Two bricks remain: the **`calldataload` byte library** (mechanically closes the `h_len`/`h_guard` reject paths) and the **tree-climb loop** (the hard core, closes `h_accept`) — best as a dedicated focused effort, one owner. Full breakdown in the repo's `Bridge/PICKUP.md`. Claim a workstream on the [Project log](/solean-learn/reference/project-log/).

@@ -5,6 +5,25 @@ description: Dated, team-facing updates — what shipped, what changed, what's n
 
 Bigger-picture than the append-only [Project log](/solean-learn/reference/project-log/) (which is decisions + open questions). This is the "what happened and what it means for you" feed.
 
+## 2026-06-04 — `evmRun` actually runs now (it didn't), + the full interpreter-stepping toolkit
+
+**TL;DR.** Three things landed on `Solvency-Labs/NiceTry` (branch `evmrun-runtime`): (1) a **caught-and-fixed bug** that made the refinement target `evmRun` vacuous, (2) the **refinement spine** that reduces the whole goal to three named facts, and (3) a **complete interpreter-stepping foundation** — every opcode/construct the contract uses now has a reduction lemma. All `sorry`-free, trust surface unchanged.
+
+**The bug (important).** `runForsCalldata` was executing the dispatcher on a state with an **empty account map**. The `recover` path calls `fun_recover` through EVMYulLean's `call`, which does `accountMap.find? codeOwner` and errors `MissingContract` *before* the code-override is consulted. That error isn't a `YulHalt`, so `evmRun` returned `0` for **every** input — which would have made `h_accept`/`ForsRefines` *false* and the reject-path goals *vacuously* true. Proven (`find? codeOwner = none` by `rfl`; `call … = MissingContract`) and **fixed** by installing an account at `codeOwner` (its code is superseded by the override; it only needs to exist). Post-fix `find? codeOwner |>.isSome = true` by `rfl`. Lesson: a "real interpreter invocation" can typecheck and still execute nothing — verify the contract is actually reached.
+
+**The refinement spine (`Bridge/Refinement.lean`).** `forsRefines_of_branches` proves `ForsRefines` from exactly three interpreter-run facts — `h_len` (bad length → `address(0)`), `h_guard` (forced-zero reject → `address(0)`), `h_accept` (else `= addressFromRoot pkSeed (recoverRoot …)`). It does *all* the model-side glue (the `recoverRaw?` case split + the `none ↔ address(0)` correspondence) and adds **zero trust** (`#print axioms` = `propext/Classical.choice/Quot.sound`). So the entire proof now factors into three precise, independently-claimable targets.
+
+**The interpreter-stepping foundation (complete).** Symbolically executing the *real* `ForsVerifier` runtime needs a reduction lemma for every construct it uses; they now exist and are `sorry`-free:
+- `Bridge/Interp.lean` — control flow (`Block`/`If`/`Leave`/`Break`/`Continue`/fuel) + `eval` base cases. Recipe: `conv_lhs => rw [exec]` then `rw` the sub-result.
+- `Bridge/InterpOps.lean` — the 14 pure stack builtins (`add sub lt gt slt and or xor shl shr byte eq iszero not`).
+- `Bridge/InterpState.lean` — the 7 stateful ops (`calldataload`, `mstore`, `keccak256`, `return`⇒`YulHalt`, `revert`⇒`.Revert`, `callvalue`, `calldatasize`).
+- `Bridge/InterpCall.lean` — user-function `call`/`execCall` (entering `fun_recover`) and the `switch` selector (EVMYulLean's `switch` eagerly runs *all* case bodies, then `foldr`-selects).
+- `Bridge/InterpEval.lean` — builtin-call composition (`eval_binop2`/`eval_unop1`), so nested expressions like `and(calldataload(x), not(C))` evaluate compositionally.
+
+A genuinely useful EVMYulLean idiom fell out: `step` (the opcode semantics) reduces with `unfold step; rfl` — blind `simp [step]` times out on its `dbg_trace`/`Id.run`.
+
+**What changes for you.** The machinery to step the deployed contract is done — what remains for the reject paths (`h_len`/`h_guard`) is **one** more brick: a `calldataload` **byte-reasoning library** (the same scale as the existing memory library) — `readBytes` over `copySlice` + the opaque `ffi.ByteArray.zeroes`, a 32-byte word round-trip (likely a small trust axiom, since EVMYulLean's `fromBytes'_toBytes'` is `private`), and extraction over `encodeForsCalldata`'s ABI layout. Then `h_len` assembles mechanically. `h_accept` is the tree-loop (Phase 4's hard core) feeding the already-proved `AddressShape` handoffs. Full breakdown in the repo's `Bridge/PICKUP.md`.
+
 ## 2026-06-01 — Address shape now matches the *real* contract
 
 **TL;DR.** The first proved shape (address derivation) was an empty-memory *template*. It's now generalized to **write-over-existing memory**, so it matches how the contract actually runs. Still `sorry`-free; trust surface unchanged.
