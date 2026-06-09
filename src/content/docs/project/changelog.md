@@ -5,6 +5,20 @@ description: Dated, team-facing updates — what shipped, what changed, what's n
 
 Bigger-picture than the append-only [Project log](/solean-learn/reference/project-log/) (which is decisions + open questions). This is the "what happened and what it means for you" feed.
 
+## 2026-06-09 — Class-A landed: the calldata byte library + dispatcher trace (and a soundness fix)
+
+**TL;DR.** The ABI-parsing foundation is proved and merged into `evmrun-runtime`: a `calldataload` byte-reasoning library, plus a symbolic execution of the `recover(bytes,bytes32)` dispatcher all the way into early `fun_recover`. Independently verified — builds green (1145 modules), `sorry`-free, axiom-clean. The reject-path obligations (`h_len`/`h_guard`) are not closed yet, but the foundation under them now is.
+
+**What's proved (`Bridge/CalldataBytes.lean`, `ClassA*.lean`).**
+- The calldata byte library: `ByteArray.readBytes` over `copySlice` + the opaque `ffi.zeroes`, then extraction over `encodeForsCalldata`'s ABI layout — `calldatasize = 2548`, selector `= 0x1aad75c5`, `calldataload 4 = 0x40`, `calldataload 36 = digest`, `calldataload 0x44 = raw.len`, and the payload chunk reads (incl. the zero-padded final counter).
+- The dispatcher trace: free-mem-ptr init → selector/size/callvalue/offset/digest/length reads → guards skipped for the good call → `offset = 0x40`, `length = raw.len`, specialized to `SigLen` → `constant_FORS_SIG_LEN() = SigLen` → the recover call's args reduce to `[100, SigLen, digest]` → enter `fun_recover`, through the masked pkSeed/R/counter reads.
+
+**A soundness fix you should know about (`Bridge/RawDomain.lean`).** Refinement is now stated over **ABI-representable lengths** (`raw.len < 2²⁵⁶`). This is a *correction*, not a hedge: `RawSig.len` is an unbounded `Nat`, but an ABI `bytes.length` is one 256-bit word, so a model length `≥ 2²⁵⁶` truncates `mod 2²⁵⁶` and could collide with `SigLen` — making the *unbounded* claim false. Scoped minimally (only the bad-length branch needs it); real calldata always satisfies it. Same calibre of catch as the earlier `evmRun` vacuity bug — found by an agent running the workstream, then independently re-verified.
+
+**Trust surface.** One new labeled axiom, `uint256_toByteArray_roundtrip` (`uInt256OfByteArray v.toByteArray = v`) — a true big-endian codec fact, provable from EVMYulLean's `private` `fromBytes'_toBytes'`, so tracked as pending the same upstream PR as `uint256_toByteArray_size`. Base is now **10 axioms** (5 keccak shapes + 3 FFI memory-padding + 2 word-codec); no cryptographic/hardness assumptions added. The reduction spine `forsRefines_of_branches` still depends on **zero** of them.
+
+**What changes for you.** The dispatcher/calldata groundwork is done, so the two reject obligations (`h_len`/`h_guard`) are now a mechanical finish on top of it. The hard core is still the **FORS tree-climb loop** (`h_accept`). See [roadmap](/solean-learn/project/roadmap/) (Phase 4) and the repo's `Bridge/PICKUP.md`.
+
 ## 2026-06-04 — `evmRun` actually runs now (it didn't), + the full interpreter-stepping toolkit
 
 **TL;DR.** Three things landed on `Solvency-Labs/NiceTry` (branch `evmrun-runtime`): (1) a **caught-and-fixed bug** that made the refinement target `evmRun` vacuous, (2) the **refinement spine** that reduces the whole goal to three named facts, and (3) a **complete interpreter-stepping foundation** — every opcode/construct the contract uses now has a reduction lemma. All `sorry`-free, trust surface unchanged.
