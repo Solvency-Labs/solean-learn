@@ -9,27 +9,40 @@ We're certifying the *deployed hand-written contract* (**route B**: prove its in
 
 Status legend: ✅ done · 🔄 in progress · 🔜 next · ⏳ later
 
-## Current checkpoint — 2026-06-13
+## Current checkpoint — 2026-06-14
 
-**Phase 4 is complete.** `Bridge/Phase4.lean` exports
+**Phase 4 is complete, and the Verity obligation accounting is now 9 of 11
+discharged with real Lean proofs.** `Bridge/Phase4.lean` exports
 `phase4_forsRefines : ForsRefines`: the deployed verifier observable agrees with
 the Lean `recoverRaw?` model on the exact ABI-representable input domain.
 
 The proof closes all three branches: malformed length returns zero, failed
 forced-zero grinding returns zero through the real `YulHalt` path, and acceptance
 executes the hmsg prefix, all 25 FORS trees, roots compression, low-160 address
-derivation, and final return. `lake build NiceTry` passes all 1169 modules.
+derivation, and final return. `lake build NiceTry` passes all 1170 modules.
+
+**Verity `local_obligations` — 9 of 11 discharged (2026-06-14).** Every
+keccak-transcript memory obligation (leaf, node, hmsg, roots, address) and both
+Class-A calldata obligations (`raw_calldata`, `raw_abi_parse`) is now `proved`,
+each backed by a real Lean theorem in `Bridge/KernelRefinement.lean` (new) or an
+existing Bridge lemma whose `mstore`/`calldataload` chain matches the kernel
+verbatim — no fabricated flags (the Verity `proved` marker is an unchecked label,
+so each flip cites a real theorem). The 2 remaining (`full_verifier` /
+`full_raw_verifier` — Class-C kernel-loop choreography) are **held as a documented
+boundary**: the equivalent choreography is already proven for the *deployed*
+contract (`tree_loop_run` + `Phase4Accept`, inside `phase4_forsRefines`), so
+re-proving it for the auxiliary Verity kernel would duplicate that whole
+induction on a reference artifact. See `Bridge/OBLIGATIONS.md` for the rationale.
 
 The active frontier is Phase 5: remove the temporary dispatcher-routing
-assumption, shrink the keccak/FFI trust surface, and discharge the 12 Verity
-`local_obligations`.
+assumption and shrink the keccak/FFI trust surface.
 
 ## Phase 0 — Onboarding & scoping ✅
 - This learning guide (T1–T6) stood up.
 - Kickoff decisions: **keccak is trusted**, this is a **tooling pivot** (work in verity + EVMYulLean, not by extending SoLean's DSL). See the [Project log](/solean-learn/reference/project-log/).
 
 ## Phase 1 — Audit & direction ✅
-- **Audited the existing verity FORS model** (`NiceTry/Fors/`): the structural Lean proofs are **fully closed — zero `sorry`** (raw decode, forced-zero guard, 25-tree climb, roots compression, address derivation). Compiles to Yul + has a Foundry replay vs the hand-written contract. **12 open `local_obligations`** at the Verity→Yul boundary.
+- **Audited the existing verity FORS model** (`NiceTry/Fors/`): the structural Lean proofs are **fully closed — zero `sorry`** (raw decode, forced-zero guard, 25-tree climb, roots compression, address derivation). Compiles to Yul + has a Foundry replay vs the hand-written contract. **11 open `local_obligations`** at the Verity→Yul boundary (9 since discharged — see Phase 4).
 - **Technical direction resolved** (see the log). Headline: target **spec-correctness conditional on trusted keccak**; **route B**.
 - Scope + "what counts as verified" bar drafted for Antonio.
 - Antonio's final sign-off on route B and the verification bar remains pending.
@@ -62,7 +75,12 @@ The shapes prove "each hash step is the right one." Phase 4 connects them to the
 - ✅ **`h_accept` assembled**: the real scoped call reaches the model address through the complete loop and post-loop return trace.
 - ✅ **`h_len` / `h_guard` assembled**: malformed length and forced-zero rejection return `address(0)`.
 - ✅ **Final theorem** (`Bridge/Phase4.lean`): `phase4_forsRefines : ForsRefines`.
-- ⏳ **Discharge the 12 `local_obligations`** (flip `.assumed → .proved`).
+- ✅ **9 of 11 `local_obligations` discharged** with real Lean theorems
+  (`Bridge/KernelRefinement.lean` + existing Bridge lemmas), flipped
+  `.assumed → .proved`: all keccak-transcript memory facts (leaf/node/hmsg/roots/address)
+  and both Class-A calldata facts. The 2 Class-C kernel-loop choreography
+  obligations are **held as a documented boundary** — the equivalent proof is
+  already complete for the deployed contract.
 
 ## Phase 5 — Trust-surface reduction & upstream ⏳
 - Split all five `evm_keccak_*` bridges into keccak-only axioms plus proved transcript encoding/masking lemmas (Gap B).
@@ -103,8 +121,10 @@ So this does **not** obsolete our work. It gives us:
 
 ---
 
-**Now:** Phase 4 is complete on `agent/phase4-integration`.
-`phase4_forsRefines` is green, and `lake build NiceTry` passes all 1169 modules.
-The remaining critical path is trust reduction: prove dispatcher routing, split
-the bundled keccak bridges, upstream the codec/FFI facts, and discharge the 12
-Verity accounting obligations. See `Bridge/PICKUP.md`.
+**Now:** Phase 4 is complete on `agent/phase4-integration`, and 9 of 11 Verity
+`local_obligations` are discharged with real Lean theorems (the 2 Class-C
+kernel-loop choreography obligations are held as a documented boundary — already
+proven for the deployed contract). `phase4_forsRefines` is green, and
+`lake build NiceTry` passes all 1170 modules. The remaining critical path is
+trust reduction: prove dispatcher routing, split the bundled keccak bridges, and
+upstream the codec/FFI facts. See `Bridge/PICKUP.md` and `Bridge/OBLIGATIONS.md`.
