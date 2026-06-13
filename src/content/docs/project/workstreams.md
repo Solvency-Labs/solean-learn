@@ -10,7 +10,7 @@ We started with everyone in the **SoLean** repo. The real verification work has 
 | Repo | Role | Where work happens |
 |---|---|---|
 | **`Solvency-Labs/solean-learn`** (this site) | Team hub — onboarding, [roadmap](/solean-learn/project/roadmap/), [log](/solean-learn/reference/project-log/), [changelog](/solean-learn/project/changelog/). **Single source of truth for plans & status.** | Docs/MDX |
-| **`Solvency-Labs/NiceTry`** (fork of `RivaLabs-Core/NiceTry`) | **The verification work.** The verity FORS model + our EVMYulLean equivalence. | `verity/NiceTry/Fors/` (model) and `verity/NiceTry/Fors/Bridge/` (ours). **Current development branch: `agent/tree-loop-A2`** (pre-loop + tree loop proved; final M4 model glue/assembly next). **Start at `Bridge/PICKUP.md`.** |
+| **`Solvency-Labs/NiceTry`** (fork of `RivaLabs-Core/NiceTry`) | **The verification work.** The verity FORS model + our EVMYulLean equivalence. | `verity/NiceTry/Fors/` (model) and `verity/NiceTry/Fors/Bridge/` (ours). **Current development branch: `agent/phase4-integration`** (`phase4_forsRefines` proved; trust reduction next). **Start at `Bridge/PICKUP.md`.** |
 | **`Solvency-Labs/SoLean`** | Methodology + the wallet-layer model. Its `PQVerifierWrapper` oracle is the slot a finished FORS proof discharges. **No longer the main dev locus.** | `SoLean/` |
 | `lfglabs-dev/EVMYulLean`, `Th0rgal/verity` | Upstream deps — real Yul/EVM semantics + the Lean→Yul compiler. | Read; occasional PRs (e.g. de-privatize `toBytes'_le`) |
 
@@ -37,7 +37,7 @@ git -C NiceTry fetch origin && git -C NiceTry merge origin/fors-verity-model
 ```bash
 git clone git@github.com:Solvency-Labs/NiceTry.git
 cd NiceTry
-git checkout agent/tree-loop-A2   # current development branch
+git checkout agent/phase4-integration   # current development branch
 cd verity
 lake exe cache get            # mathlib oleans (fast)
 lake build NiceTry            # builds the model + Bridge
@@ -62,6 +62,8 @@ The branch builds green; individual completion status is noted below and in the 
 - `AddressShape.lean` — **all five transcript shapes** closed EVM→model (address/hmsg/leaf/node/roots) + the roots→`recoverRoot` handoff skeleton.
 - `EvmFfiSpec.lean`, `InterpKeccak.lean`, `EvmRunRecover.lean` — the explicit trusted-spec layer (12 labeled axioms on the current branch).
 - **`Refinement.lean`** — reduces `ForsRefines` to three named execution facts (`h_len`/`h_guard`/`h_accept`); zero added trust.
+- **`Phase4Accept.lean`, `Phase4Reject.lean`, `Phase4.lean`** — close the three
+  execution branches and export `phase4_forsRefines : ForsRefines`.
 - **`ForsRuntime.lean`, `EvmRun.lean`** — the deployed contract transcribed to the EVMYulLean DSL + `evmRun` (the interpreter invocation; account-install bug fixed).
 - **`Interp.lean`, `InterpOps.lean`, `InterpState.lean`, `InterpCall.lean`, `InterpEval.lean`** — the interpreter-stepping foundation: reduction lemmas for every construct in the dispatcher + `fun_recover` (control flow, builtins, stateful ops, user-calls/switch, expression composition).
 - **`TreeLeaf.lean` through `TreeLoop.lean`** — complete symbolic execution and 25-step induction for the real tree loop, including all root-buffer writes.
@@ -71,9 +73,9 @@ The branch builds green; individual completion status is noted below and in the 
 - **`TreeEntry.lean`, `TreeEntryFront.lean`** — the complete statement-level pre-loop trace through the hmsg stores, forced-zero skip, loop-variable initialization, and `LoopInv 0`.
 - `OBLIGATIONS.md`, `CLASS-M.md` — the discharge plan + the three-layer architecture.
 
-The current open edge is the header/model boundary: identify the named
-interpreter words with `decodeTyped raw`/`dValOf`, derive the EVM forced-zero
-guard, then compose pre-loop + loop + post-loop into `h_accept`.
+The current open edge is trust reduction: replace dispatcher routing with a
+theorem, split the bundled keccak/encoding assumptions, upstream the codec/FFI
+facts, and discharge the 12 Verity `local_obligations`.
 
 ## Trust surface
 

@@ -10,18 +10,20 @@ A lightweight, append-only record of **decisions** and **open questions**. Newes
 These are live. Claim one, resolve it, then move it to "Decisions" with the outcome.
 
 1. **Antonio sign-off** — confirm route B + the proposed "verified" bar (full refinement, no `assumed`, with an explicit keccak + EVM-memory-primitive trusted base). *(pending; drafted)*
-2. **[workstream] header/model + forced-zero glue** — connect
-   `recoverHmsgPkWord`/R/counter/digest to `decodeTyped raw` and `dValOf`, then
-   derive the interpreter's bit-mask guard from `forcedZero = true`. Resolve the
-   bytes32 digest boundary explicitly.
-3. **[workstream] final branch assembly** — compose the proved
-   pre-loop/loop/post-loop pieces into `h_accept`, and finish the reject branches
-   `h_len`/`h_guard`.
-4. **[workstream] dispatcher routing** — finish the switch/fuel composition and replace `dispatcher_routes_to_recover` with a theorem.
-5. **[workstream] Gap-B split** — separate the five `evm_keccak_*` assumptions into keccak-only axioms plus proved transcript encoding/masking lemmas.
-6. **[workstream] upstream PR** — expose EVMYulLean's private word-codec/keccak-size lemmas to discharge `uint256_toByteArray_size`, `uint256_toByteArray_roundtrip`, and `ffi_kec_lt`.
+2. **[workstream] dispatcher routing** — finish the switch/fuel composition and replace `dispatcher_routes_to_recover` with a theorem.
+3. **[workstream] Gap-B split** — separate the five `evm_keccak_*` assumptions into keccak-only axioms plus proved transcript encoding/masking lemmas.
+4. **[workstream] upstream PR** — expose EVMYulLean's private word-codec/keccak-size lemmas to discharge `uint256_toByteArray_size`, `uint256_toByteArray_roundtrip`, and `ffi_kec_lt`.
+5. **[workstream] Verity accounting** — flip the 12 `local_obligations` from `.assumed` to `.proved`.
 
 ## Decisions
+
+### 2026-06-13 — Phase 4 deployed refinement is complete
+`Bridge/Phase4.lean` exports `phase4_forsRefines : ForsRefines`. The accept
+trace runs the real scoped call through hmsg, all 25 trees, roots compression,
+address derivation, and return; the two reject outcomes return zero. The theorem
+uses the truthful `ForsAbiInput` domain because the model's unbounded `Nat`
+fields otherwise truncate at the ABI boundary. `lake build NiceTry` passes all
+1169 modules; the axiom audit shows only the documented trust surface.
 
 ### 2026-06-13 — the complete pre-loop execution trace is proved
 `TreeEntryFront.lean` executes `fun_recover.body[18:32]`, proves the five-word

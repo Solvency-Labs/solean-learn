@@ -5,6 +5,32 @@ description: Dated, team-facing updates — what shipped, what changed, what's n
 
 Bigger-picture than the append-only [Project log](/solean-learn/reference/project-log/) (which is decisions + open questions). This is the "what happened and what it means for you" feed.
 
+## 2026-06-13 — Phase 4 is complete: deployed FORS refinement proved
+
+**TL;DR.** `Bridge/Phase4.lean` now exports
+`phase4_forsRefines : ForsRefines`. The deployed verifier observable matches the
+Lean recovery model on the exact ABI-representable input domain.
+
+**What landed.** The accept branch executes the real scoped `fun_recover` call
+through the hmsg transcript, all 25 tree reconstructions, roots compression,
+low-160 address derivation, and final `RETURN`. Forced-zero rejection is proved
+through its concrete `YulHalt` zero return. The malformed-length word guard/body
+is proved, and the scoped observable normalizes that outcome to zero. The proof
+uses exact fuel `155`, with no fuel-monotonicity axiom.
+
+**Soundness fix.** `ForsRefines` and `RefinesModel` now quantify over
+`ForsAbiInput`: representable length, packed 16-byte fields, and a bytes32-sized
+digest. The previous length-only domain was false for arbitrary model `Nat`
+values because ABI encoding truncates them.
+
+**Verification.** `lake build NiceTry` passes all 1169 modules. `#print axioms
+phase4_forsRefines` reports only Lean core plus the documented dispatcher,
+keccak, FFI, and word-codec trust items. No `sorryAx`.
+
+**Next.** Phase 5 removes `dispatcher_routes_to_recover`, splits the bundled
+keccak/encoding assumptions, upstreams the codec/FFI facts, and discharges the
+12 Verity `local_obligations`.
+
 ## 2026-06-13 — The complete pre-loop trace now reaches `LoopInv 0`
 
 **TL;DR.** The gap immediately before the proved 25-tree loop is closed.
