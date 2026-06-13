@@ -10,13 +10,16 @@ A lightweight, append-only record of **decisions** and **open questions**. Newes
 These are live. Claim one, resolve it, then move it to "Decisions" with the outcome.
 
 1. **Antonio sign-off** — confirm route B + the proposed "verified" bar (full refinement, no `assumed`, with an explicit keccak + EVM-memory-primitive trusted base). *(pending; drafted)*
-2. **[workstream] hmsg / leaf / node shapes** — apply the `address_derivation_eq` template via `writeWords32_data` + per-shape keccak bridges. *(mechanical; claimable)*
-3. **[workstream] roots shape + full execution** — the FORS tree **loop** + ADRS arithmetic + composing all shapes into `RefinesModel evmRun`. *(the hard core; best as a focused effort)*
-4. **[workstream] write-over-existing memory** — generalize the empty-memory assumption (the contract reuses the `0x00` region across hashes).
-5. **[workstream] Gap-B split** — separate `evm_keccak_address` into a keccak-only axiom + a proved `encodeTranscript` masking lemma.
-6. **[workstream] upstream PR** — de-privatize `toBytes'_le` in EVMYulLean to discharge `uint256_toByteArray_size`.
+2. **[workstream] pre-loop statement trace** — execute `fun_recover` statements 18–31, using `TreePreLoop.lean` to establish the hmsg result, forced-zero skip, padding store, and `LoopInv 0` at statement 32.
+3. **[workstream] final branch assembly** — compose the proved pre-loop/loop/post-loop pieces into `h_accept`, and finish the reject branches `h_len`/`h_guard`.
+4. **[workstream] dispatcher routing** — finish the switch/fuel composition and replace `dispatcher_routes_to_recover` with a theorem.
+5. **[workstream] Gap-B split** — separate the five `evm_keccak_*` assumptions into keccak-only axioms plus proved transcript encoding/masking lemmas.
+6. **[workstream] upstream PR** — expose EVMYulLean's private word-codec/keccak-size lemmas to discharge `uint256_toByteArray_size`, `uint256_toByteArray_roundtrip`, and `ffi_kec_lt`.
 
 ## Decisions
+
+### 2026-06-13 — the real 25-tree interpreter loop is proved
+The `agent/tree-loop-A2` branch closes the complete 25-iteration `fun_recover` loop: six hashes per tree, loop-state induction, pointer/index arithmetic, calldata-to-model opening values, and all 25 root-buffer writes. Post-loop roots/address machinery is also proved. The live frontier is the pre-loop statement trace and final `h_accept` composition, not the tree induction. `lake build NiceTry` passes all 1164 modules.
 
 ### 2026-06-01 — route B (certify the hand-written contract)
 We certify the deployed inline-assembly `ForsVerifier.sol` by proving it **refines** a clean Lean model via **EVMYulLean** (not by shipping a verified-by-construction verity Yul replacement). Rationale: it blesses the actual production artifact and is the more useful result; the model already exists, so the marginal work lands on the equivalence itself. *(Resolves old Q2.)*

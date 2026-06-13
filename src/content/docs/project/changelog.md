@@ -5,6 +5,16 @@ description: Dated, team-facing updates — what shipped, what changed, what's n
 
 Bigger-picture than the append-only [Project log](/solean-learn/reference/project-log/) (which is decisions + open questions). This is the "what happened and what it means for you" feed.
 
+## 2026-06-13 — The tree loop is closed; M4 assembly is now the frontier
+
+**TL;DR.** The former long pole is done: the real 25-iteration `fun_recover` tree loop is proved end to end on `agent/tree-loop-A2`. The current `lake build NiceTry` passes all 1164 modules. The remaining happy-path work is assembly around the loop, not the loop induction itself.
+
+**What landed.** `TreeLeaf` through `TreeLoop` symbolically execute the six hashes in each iteration, maintain the machine-state invariant, advance all pointers and index bits, and prove all 25 root slots contain the model chain values. `TreeCalldata` now provides the general payload-pair extraction, masked `calldataload` → `read16` bridge, `RawSigWellFormed`, and closed-form `loopSk`/`loopSib` reads. `TreeFinal` supplies the roots-buffer/post-loop compression and address-return machinery.
+
+**Current stopping point.** `TreePreLoop.lean` has the padding-`mstore` calculus for `mstore(0x380, pkSeed)` and the five-word hmsg keccak-window theorem. The next proof step has **not** landed yet: symbolically execute `fun_recover` statements 18–31 and establish the loop-entry state at statement 32. Then compose that state with the proved loop and `TreeFinal` to close `h_accept`.
+
+**Trust and remaining work.** The development branch has 12 explicit labeled axioms: 5 keccak-shape bridges, 3 FFI zero-padding specs, 2 word-codec specs, `ffi_kec_lt`, and the temporary `dispatcher_routes_to_recover`. No `sorryAx` was introduced. `h_len`, `h_guard`, final `h_accept` assembly, dispatcher-axiom removal, and the 12 Verity `local_obligations` remain open.
+
 ## 2026-06-09 — Class-A landed: the calldata byte library + dispatcher trace (and a soundness fix)
 
 **TL;DR.** The ABI-parsing foundation is proved and merged into `evmrun-runtime`: a `calldataload` byte-reasoning library, plus a symbolic execution of the `recover(bytes,bytes32)` dispatcher all the way into early `fun_recover`. Independently verified — builds green (1145 modules), `sorry`-free, axiom-clean. The reject-path obligations (`h_len`/`h_guard`) are not closed yet, but the foundation under them now is.
