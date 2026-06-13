@@ -11,13 +11,18 @@ Status legend: ✅ done · 🔄 in progress · 🔜 next · ⏳ later
 
 ## Current checkpoint — 2026-06-13
 
-The difficult interpreter proof is no longer the tree induction: the real
-25-iteration loop is proved. Work stopped immediately before the remaining
-pre-loop statement trace. The next theorem must execute
-`fun_recover.body[18:32]`, establish the hmsg value and forced-zero skip, perform
-the padding store at `0x380`, initialize the loop variables, and produce
-`LoopInv 0`. That state feeds the proved loop and post-loop machinery to assemble
-`h_accept`.
+The complete pre-loop trace now reaches the proved tree loop. Commit
+[`43572e8`](https://github.com/Solvency-Labs/NiceTry/commit/43572e8) adds
+`Bridge/TreeEntryFront.lean`: it executes `fun_recover.body[18:32]`, proves the
+five-word hmsg transcript and `keccak256(0, 0xa0)` value, skips the forced-zero
+branch under its guard hypothesis, performs the padding store at `0x380`,
+initializes the loop variables, and produces `LoopInv 0`.
+
+The next boundary is model glue, not interpreter choreography: connect the named
+pkSeed/R/counter/digest words to `decodeTyped raw` and `dValOf`, then derive the
+EVM guard hypothesis from `forcedZero (dValOf raw digest) = true`. After that,
+compose the pre-loop theorem with the proved 25-iteration loop and post-loop
+trace to close `h_accept`.
 
 ## Phase 0 — Onboarding & scoping ✅
 - This learning guide (T1–T6) stood up.
@@ -52,8 +57,9 @@ The shapes prove "each hash step is the right one." Phase 4 connects them to the
 - ✅ **Tree calldata/value glue is proved** (`Bridge/TreeCalldata.lean`): general payload-pair extraction, masked `calldataload` → `read16`, `RawSigWellFormed`, and closed-form `loopSk`/`loopSib` reads connect the interpreter's calldata words to the model openings.
 - ✅ **Post-loop machinery is proved** (`Bridge/TreeFinal.lean`): roots-buffer concatenation, roots compression, address derivation, and the return-side statement machinery are available for final `h_accept` assembly.
 - ✅ **Pre-loop support lemmas** (`Bridge/TreePreLoop.lean`): the padding-`mstore` calculus and five-word hmsg keccak window are proved.
-- 🔄 **Pre-loop statement trace**: execute `fun_recover` statements 18–31 and establish `LoopInv 0` at the loop entry. This is the exact current stopping point.
-- 🔜 **Assemble `h_accept`**: compose the new pre-loop trace with the proved loop, calldata/value glue, and post-loop machinery.
+- ✅ **Complete pre-loop statement trace** (`Bridge/TreeEntryFront.lean`): `exec_recover_hmsg_named` executes statements 18–24; `recoverHmsgDVal_toNat` proves the hmsg value; `exec_recover_preloop_to_loopInv` composes statements 18–31 and establishes `LoopInv 0`.
+- 🔄 **Header/model boundary glue**: connect the named interpreter words to `decodeTyped raw`/`dValOf` and derive the EVM forced-zero condition. The final counter uses the dedicated padded-counter calldata lemma. The digest boundary must explicitly respect `bytes32`: either carry `digest < 2²⁵⁶` or normalize the model to the ABI word.
+- 🔜 **Assemble `h_accept`**: compose `exec_recover_preloop_to_loopInv` with the proved loop, calldata/value glue, and post-loop machinery.
 - 🔜 **Assemble `h_len` / `h_guard`**: finish the bad-length and forced-zero reject traces (`RETURN address(0)`) on top of the dispatcher foundation.
 - ⏳ **Discharge the 12 `local_obligations`** (flip `.assumed → .proved`).
 
@@ -71,6 +77,36 @@ hardness assumption; everything else checks to Lean's core.
 - Wire the proved FORS theorem into SoLean's `PQVerifierWrapper` (refine its placeholder `signature : UInt256` to a real `RawSig`).
 - Final write-up + hand back to Antonio.
 
+## External landscape — SPHINCS- Verity work
+
+The newly published [SPHINCS- project](https://github.com/nconsigny/SPHINCS-/tree/main/verity)
+proves substantially broader algorithmic verifiers: a full C13 keccak-based
+SPHINCS- variant and an SLH-DSA SHA-2 verifier. That includes FORS/FORS+C plus
+the WOTS+/hypertree layers absent from our current target.
+
+The assurance boundaries differ. Their own Verity README says the Solidity
+assembly is hand-transcribed into models that are not deployed, compiled into
+the production contracts, or replayed against them; correspondence to production
+rests on reviewing the transcription. Our project is narrower, but its route-B
+goal is stronger at that boundary: symbolically execute the deployed
+`ForsVerifier.sol` runtime in EVMYulLean and prove it refines the Lean FORS+C
+model.
+
+So this does **not** obsolete our work. It gives us:
+
+- a useful independent full-scheme reference for FORS+C, WOTS+C, and hypertree
+  structure;
+- proof and parameterization patterns worth comparing or reusing;
+- a sharper project claim: **deployed-code refinement for the FORS+C verifier**,
+  complementary to their broader **hand-transcribed model-to-spec proof**.
+
 ---
 
-**Now:** Phase 3 is complete and the hard core of Phase 4 has landed. The exact next task is the statement trace for `fun_recover.body[18:32]`; no part of that trace has been claimed as complete. After it establishes `LoopInv 0`, the proved loop and post-loop results can be composed into `h_accept`. The remaining critical path is then `h_len`/`h_guard`, dispatcher-routing proof, and the 12 Verity accounting obligations. Current work is on `agent/tree-loop-A2`, ahead of `evmrun-runtime`; see `Bridge/PICKUP.md`.
+**Now:** Phase 3 is complete and the pre-loop, loop, and post-loop execution
+components of Phase 4 are independently proved. The exact next task is the
+header/model and forced-zero glue needed to instantiate
+`exec_recover_preloop_to_loopInv`, followed by final `h_accept` composition. The
+remaining critical path is then `h_len`/`h_guard`, dispatcher-routing proof, and
+the 12 Verity accounting obligations. Current work is on
+`agent/tree-loop-A2`; `lake build NiceTry` passes all 1166 modules. See
+`Bridge/PICKUP.md`.

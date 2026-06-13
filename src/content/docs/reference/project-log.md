@@ -10,13 +10,38 @@ A lightweight, append-only record of **decisions** and **open questions**. Newes
 These are live. Claim one, resolve it, then move it to "Decisions" with the outcome.
 
 1. **Antonio sign-off** — confirm route B + the proposed "verified" bar (full refinement, no `assumed`, with an explicit keccak + EVM-memory-primitive trusted base). *(pending; drafted)*
-2. **[workstream] pre-loop statement trace** — execute `fun_recover` statements 18–31, using `TreePreLoop.lean` to establish the hmsg result, forced-zero skip, padding store, and `LoopInv 0` at statement 32.
-3. **[workstream] final branch assembly** — compose the proved pre-loop/loop/post-loop pieces into `h_accept`, and finish the reject branches `h_len`/`h_guard`.
+2. **[workstream] header/model + forced-zero glue** — connect
+   `recoverHmsgPkWord`/R/counter/digest to `decodeTyped raw` and `dValOf`, then
+   derive the interpreter's bit-mask guard from `forcedZero = true`. Resolve the
+   bytes32 digest boundary explicitly.
+3. **[workstream] final branch assembly** — compose the proved
+   pre-loop/loop/post-loop pieces into `h_accept`, and finish the reject branches
+   `h_len`/`h_guard`.
 4. **[workstream] dispatcher routing** — finish the switch/fuel composition and replace `dispatcher_routes_to_recover` with a theorem.
 5. **[workstream] Gap-B split** — separate the five `evm_keccak_*` assumptions into keccak-only axioms plus proved transcript encoding/masking lemmas.
 6. **[workstream] upstream PR** — expose EVMYulLean's private word-codec/keccak-size lemmas to discharge `uint256_toByteArray_size`, `uint256_toByteArray_roundtrip`, and `ffi_kec_lt`.
 
 ## Decisions
+
+### 2026-06-13 — the complete pre-loop execution trace is proved
+`TreeEntryFront.lean` executes `fun_recover.body[18:32]`, proves the five-word
+hmsg transcript/value, and composes through the forced-zero skip and loop
+initialization to `LoopInv 0`. The previous deep-definitional-equality blocker
+was removed by naming each intermediate machine state. `lake build NiceTry`
+passes all 1166 modules; the next edge is header/model glue and final
+`h_accept` composition.
+
+### 2026-06-13 — SPHINCS- is broader, but proves a different boundary
+Antonio shared the new
+[SPHINCS- Verity repository](https://github.com/nconsigny/SPHINCS-/tree/main/verity)
+and [Ethereum Research post](https://ethresear.ch/t/sphincs-minus-efficient-stateless-post-quantum-signature-verification-on-the-evm/25165).
+It covers full C13 and SLH-DSA-style verifiers, including FORS/FORS+C,
+WOTS+/WOTS+C, and hypertree verification. Its own README says the production
+assembly is hand-transcribed into non-deployed Verity models and correspondence
+to the code rests on review. Our scope is narrower (the FORS+C verifier), but
+route B targets the stronger deployed-code boundary through EVMYulLean. Treat
+the projects as complementary and mine their full-scheme proof structure for
+reusable patterns.
 
 ### 2026-06-13 — the real 25-tree interpreter loop is proved
 The `agent/tree-loop-A2` branch closes the complete 25-iteration `fun_recover` loop: six hashes per tree, loop-state induction, pointer/index arithmetic, calldata-to-model opening values, and all 25 root-buffer writes. Post-loop roots/address machinery is also proved. The live frontier is the pre-loop statement trace and final `h_accept` composition, not the tree induction. `lake build NiceTry` passes all 1164 modules.

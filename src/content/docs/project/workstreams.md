@@ -10,7 +10,7 @@ We started with everyone in the **SoLean** repo. The real verification work has 
 | Repo | Role | Where work happens |
 |---|---|---|
 | **`Solvency-Labs/solean-learn`** (this site) | Team hub — onboarding, [roadmap](/solean-learn/project/roadmap/), [log](/solean-learn/reference/project-log/), [changelog](/solean-learn/project/changelog/). **Single source of truth for plans & status.** | Docs/MDX |
-| **`Solvency-Labs/NiceTry`** (fork of `RivaLabs-Core/NiceTry`) | **The verification work.** The verity FORS model + our EVMYulLean equivalence. | `verity/NiceTry/Fors/` (model) and `verity/NiceTry/Fors/Bridge/` (ours). **Current development branch: `agent/tree-loop-A2`** (tree loop + M4 assembly work; ahead of `evmrun-runtime`). **Start at `Bridge/PICKUP.md`.** |
+| **`Solvency-Labs/NiceTry`** (fork of `RivaLabs-Core/NiceTry`) | **The verification work.** The verity FORS model + our EVMYulLean equivalence. | `verity/NiceTry/Fors/` (model) and `verity/NiceTry/Fors/Bridge/` (ours). **Current development branch: `agent/tree-loop-A2`** (pre-loop + tree loop proved; final M4 model glue/assembly next). **Start at `Bridge/PICKUP.md`.** |
 | **`Solvency-Labs/SoLean`** | Methodology + the wallet-layer model. Its `PQVerifierWrapper` oracle is the slot a finished FORS proof discharges. **No longer the main dev locus.** | `SoLean/` |
 | `lfglabs-dev/EVMYulLean`, `Th0rgal/verity` | Upstream deps — real Yul/EVM semantics + the Lean→Yul compiler. | Read; occasional PRs (e.g. de-privatize `toBytes'_le`) |
 
@@ -67,8 +67,13 @@ The branch builds green; individual completion status is noted below and in the 
 - **`TreeLeaf.lean` through `TreeLoop.lean`** — complete symbolic execution and 25-step induction for the real tree loop, including all root-buffer writes.
 - **`TreeCalldata.lean`** — general payload extraction, masked calldata reads, and the `loopSk`/`loopSib` bridge to model openings.
 - **`TreeFinal.lean`** — post-loop roots compression, address derivation, and return machinery.
-- **`TreePreLoop.lean`** — padding-store calculus and hmsg keccak-window facts; the statement-level pre-loop trace is the current open edge.
+- **`TreePreLoop.lean`** — padding-store calculus and hmsg keccak-window facts.
+- **`TreeEntry.lean`, `TreeEntryFront.lean`** — the complete statement-level pre-loop trace through the hmsg stores, forced-zero skip, loop-variable initialization, and `LoopInv 0`.
 - `OBLIGATIONS.md`, `CLASS-M.md` — the discharge plan + the three-layer architecture.
+
+The current open edge is the header/model boundary: identify the named
+interpreter words with `decodeTyped raw`/`dValOf`, derive the EVM forced-zero
+guard, then compose pre-loop + loop + post-loop into `h_accept`.
 
 ## Trust surface
 

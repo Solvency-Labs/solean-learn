@@ -5,13 +5,43 @@ description: Dated, team-facing updates — what shipped, what changed, what's n
 
 Bigger-picture than the append-only [Project log](/solean-learn/reference/project-log/) (which is decisions + open questions). This is the "what happened and what it means for you" feed.
 
+## 2026-06-13 — The complete pre-loop trace now reaches `LoopInv 0`
+
+**TL;DR.** The gap immediately before the proved 25-tree loop is closed.
+[`43572e8`](https://github.com/Solvency-Labs/NiceTry/commit/43572e8) adds
+`TreeEntryFront.lean`; `lake build NiceTry` now passes all 1166 modules.
+
+**What landed.** `exec_recover_hmsg_named` executes `fun_recover` statements
+18–24 through the masked pkSeed read, five hmsg `mstore`s, and
+`keccak256(0, 0xa0)`. Named intermediate states avoid the deep definitional
+equality blow-up that stopped the previous session. `recoverHmsgDVal_toNat`
+proves the resulting interpreter word is the model `hMsg` over the five stored
+words. `exec_recover_preloop_to_loopInv` then composes the existing forced-zero
+skip, `mstore(0x380, pkSeed)`, and loop-variable initialization to reach
+statement 32 with `LoopInv 0`.
+
+**What remains.** Connect the named header words and bytes32 digest to
+`decodeTyped raw`/`dValOf`, derive the EVM guard from the model's `forcedZero =
+true`, and compose pre-loop + loop + post-loop into `h_accept`. The final counter
+read needs the dedicated padded-counter calldata lemma rather than the general
+two-chunk payload theorem.
+
+**External context.** The new
+[SPHINCS- Verity work](https://github.com/nconsigny/SPHINCS-/tree/main/verity)
+proves broader full-scheme models, including C13 and SLH-DSA. Its README states
+that the production assembly is hand-transcribed and code-to-model
+correspondence rests on review. Our narrower project remains differentiated by
+its stronger target: refinement of the deployed FORS+C runtime through
+EVMYulLean.
+
 ## 2026-06-13 — The tree loop is closed; M4 assembly is now the frontier
 
 **TL;DR.** The former long pole is done: the real 25-iteration `fun_recover` tree loop is proved end to end on `agent/tree-loop-A2`. The current `lake build NiceTry` passes all 1164 modules. The remaining happy-path work is assembly around the loop, not the loop induction itself.
 
 **What landed.** `TreeLeaf` through `TreeLoop` symbolically execute the six hashes in each iteration, maintain the machine-state invariant, advance all pointers and index bits, and prove all 25 root slots contain the model chain values. `TreeCalldata` now provides the general payload-pair extraction, masked `calldataload` → `read16` bridge, `RawSigWellFormed`, and closed-form `loopSk`/`loopSib` reads. `TreeFinal` supplies the roots-buffer/post-loop compression and address-return machinery.
 
-**Current stopping point.** `TreePreLoop.lean` has the padding-`mstore` calculus for `mstore(0x380, pkSeed)` and the five-word hmsg keccak-window theorem. The next proof step has **not** landed yet: symbolically execute `fun_recover` statements 18–31 and establish the loop-entry state at statement 32. Then compose that state with the proved loop and `TreeFinal` to close `h_accept`.
+**Update:** this stopping point was closed later on June 13 by
+`TreeEntryFront.lean`; see the entry above.
 
 **Trust and remaining work.** The development branch has 12 explicit labeled axioms: 5 keccak-shape bridges, 3 FFI zero-padding specs, 2 word-codec specs, `ffi_kec_lt`, and the temporary `dispatcher_routes_to_recover`. No `sorryAx` was introduced. `h_len`, `h_guard`, final `h_accept` assembly, dispatcher-axiom removal, and the 12 Verity `local_obligations` remain open.
 
