@@ -10,9 +10,9 @@ We started with everyone in the **SoLean** repo. The real verification work has 
 | Repo | Role | Where work happens |
 |---|---|---|
 | **`Solvency-Labs/solean-learn`** (this site) | Team hub — onboarding, [roadmap](/solean-learn/project/roadmap/), [log](/solean-learn/reference/project-log/), [changelog](/solean-learn/project/changelog/). **Single source of truth for plans & status.** | Docs/MDX |
-| **`Solvency-Labs/NiceTry`** (fork of `RivaLabs-Core/NiceTry`) | **The verification work.** The verity FORS model + our EVMYulLean equivalence. | `verity/NiceTry/Fors/` (model) and `verity/NiceTry/Fors/Bridge/` (ours). **Current development branch: `agent/phase4-integration`** (`phase4_forsRefines` proved; trust reduction next). **Start at `Bridge/PICKUP.md`.** |
+| **`Solvency-Labs/NiceTry`** (fork of `RivaLabs-Core/NiceTry`) | **The verification work.** The verity FORS model + our EVMYulLean equivalence. | `verity/NiceTry/Fors/` (model) and `verity/NiceTry/Fors/Bridge/` (ours). **Current development branch: `agent/phase4-integration`** (`phase4_forsRefines` proved; two-axiom trust hardening in progress). **Start at `Bridge/PICKUP.md`.** |
 | **`Solvency-Labs/SoLean`** | Methodology + the wallet-layer model. Its `PQVerifierWrapper` oracle is the slot a finished FORS proof discharges. **No longer the main dev locus.** | `SoLean/` |
-| `lfglabs-dev/EVMYulLean`, `Th0rgal/verity` | Upstream deps — real Yul/EVM semantics + the Lean→Yul compiler. | Read; occasional PRs (e.g. de-privatize `toBytes'_le`) |
+| `lfglabs-dev/EVMYulLean`, `Th0rgal/verity` | Upstream deps — real Yul/EVM semantics + the Lean→Yul compiler. | Read; occasional PRs (e.g. expose the public word-codec theorem now wrapped locally) |
 
 ## The fork (why and how)
 
@@ -62,8 +62,9 @@ The branch builds green; individual completion status is noted below and in the 
 - `ByteArrayLemmas.lean` — the `ByteArray.write`/`readWithPadding` library + `writeWords32_data`.
 - `EvmMemory.lean` — `MachineState.mstore` → keccak-input bytes.
 - `AddressShape.lean` — **all five transcript shapes** closed EVM→model (address/hmsg/leaf/node/roots) + the roots→`recoverRoot` handoff skeleton.
-- `EvmFfiSpec.lean`, `InterpKeccak.lean`, `AddressShape.lean` — the explicit
-  trusted-spec layer (7 labeled project axioms declared on the current branch).
+- `EvmFfiSpec.lean` — proved zero-padding and word-codec facts; no project axioms.
+- `InterpKeccak.lean`, `AddressShape.lean` — the explicit trusted-spec layer
+  (2 labeled project axioms declared on the current branch).
 - **`TranscriptEncoding.lean`** — canonical transcript bytes plus proved
   address/hmsg/leaf/node/roots encoding equalities; five bundled Keccak axioms
   are reduced to one generic `evm_keccak_transcript`.
@@ -81,8 +82,10 @@ The branch builds green; individual completion status is noted below and in the 
 - **`TreeEntry.lean`, `TreeEntryFront.lean`** — the complete statement-level pre-loop trace through the hmsg stores, forced-zero skip, loop-variable initialization, and `LoopInv 0`.
 - `OBLIGATIONS.md`, `CLASS-M.md` — the discharge plan + the three-layer architecture.
 
-The current open edge is trust reduction: upstream the codec/FFI facts. The
-bundled keccak/encoding assumptions are already split. Nine of eleven Verity
+The current open edge is trust hardening: upstream the public codec wrapper and
+decide the long-term treatment of the 32-byte Keccak extern contract. The
+bundled keccak/encoding assumptions are split and the padding/codec facts are
+proved. Nine of eleven Verity
 `local_obligations` are discharged; the two kernel-loop choreography labels are
 held as a documented auxiliary-artifact boundary.
 
@@ -92,8 +95,7 @@ Everything checks down to Lean's core (`propext`, `Classical.choice`, `Quot.soun
 
 - **generic Keccak bridge** (×1) — `evm_keccak_transcript`; the canonical
   transcript encoding and output masking are proved.
-- **`ffi.ByteArray.zeroes` specs** (×3) — total-correctness of the opaque EVM memory-padding primitive.
-- **word-codec specs** (×2) — `uint256_toByteArray_size` and `uint256_toByteArray_roundtrip`, both blocked on private upstream lemmas.
-- **keccak output bound** (×1) — `ffi_kec_lt`, a total-correctness fact for the opaque FFI.
+- **Keccak FFI shape** (×1) — `ffi_kec_size`, stating that the extern returns
+  exactly 32 bytes. `ffi_kec_lt` is derived from it.
 
 None of these are cryptographic-hardness assumptions.

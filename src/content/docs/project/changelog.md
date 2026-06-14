@@ -5,6 +5,22 @@ description: Dated, team-facing updates — what shipped, what changed, what's n
 
 Bigger-picture than the append-only [Project log](/solean-learn/reference/project-log/) (which is decisions + open questions). This is the "what happened and what it means for you" feed.
 
+## 2026-06-14 — Phase 5 trust base drops from seven axioms to two
+
+The three `ffi.ByteArray.zeroes` specifications and both
+`UInt256.toByteArray` codec facts are now ordinary Lean theorems. The padding
+primitive has a reducible Lean body despite its extern implementation, and the
+codec proof wraps EVMYulLean's existing private encoder-length theorem.
+
+The generic Keccak numeric bound is no longer assumed either:
+`InterpKeccak.lean` trusts only the C boundary's 32-byte output shape
+(`ffi_kec_size`) and derives `< 2^256` from EVMYulLean's public decoder theorem.
+
+`lake build NiceTry` passes all 1172 modules. `#print axioms
+phase4_forsRefines` now reports Lean core plus exactly
+`evm_keccak_transcript` and `ffi_kec_size`. Phase 5 continues as upstream/API
+hardening, not as an open correctness proof.
+
 ## 2026-06-14 — Phase 5 starts: five Keccak bridge axioms reduced to one
 
 `TranscriptEncoding.lean` now defines the canonical byte encoding of model

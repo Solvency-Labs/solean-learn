@@ -9,13 +9,25 @@ A lightweight, append-only record of **decisions** and **open questions**. Newes
 
 These are live. Claim one, resolve it, then move it to "Decisions" with the outcome.
 
-1. **Antonio sign-off** — confirm route B + the proposed "verified" bar (full refinement, no `assumed`, with an explicit keccak + EVM-memory-primitive trusted base). *(pending; drafted)*
-2. **[workstream] upstream PR** — expose EVMYulLean's private word-codec/keccak-size lemmas to discharge `uint256_toByteArray_size`, `uint256_toByteArray_roundtrip`, and `ffi_kec_lt`.
+1. **Antonio sign-off** — confirm route B + the proposed "verified" bar
+   (deployed refinement with the explicit two-item Keccak boundary; auxiliary
+   kernel-loop obligations documented separately). *(pending; drafted)*
+2. **[workstream] upstream hardening** — expose a public EVMYulLean word-codec
+   theorem to replace the local private-name hook; assess whether the 32-byte
+   `ffi.KEC` extern contract should remain explicit or link to modeled Keccak.
 3. **[decision] Verity kernel boundary** — decide whether the two held
    auxiliary-kernel choreography obligations should remain documented or receive
    a separate duplicate loop proof.
 
 ## Decisions
+
+### 2026-06-14 — padding and codec axioms are discharged; trust base is two
+`EvmFfiSpec.lean` now proves the three `ffi.ByteArray.zeroes` facts and both
+`UInt256.toByteArray` codec facts. `InterpKeccak.lean` replaces the trusted
+numeric bound with one narrow extern-shape assumption, `ffi_kec_size`, and
+derives `< 2^256` using EVMYulLean's decoder theorem. `phase4_forsRefines`
+depends only on Lean core, `evm_keccak_transcript`, and `ffi_kec_size`.
+`lake build NiceTry` passes all 1172 modules.
 
 ### 2026-06-14 — Gap B is split; five Keccak axioms become one
 `TranscriptEncoding.lean` proves the concrete EVM bytes for all five transcript

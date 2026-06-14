@@ -3,7 +3,7 @@ title: Roadmap
 description: Where we are and where we're going — the phased plan to certify ForsVerifier.sol, with current status.
 ---
 
-The north star: **a formal proof that `ForsVerifier.sol` correctly implements FORS+C recovery**, conditional on a small, explicit trusted base (keccak + a few EVM memory-primitive specs). No cryptographic soundness claim — that's inherited from the FORS scheme, not re-proved.
+The north star: **a formal proof that `ForsVerifier.sol` correctly implements FORS+C recovery**, conditional on a small, explicit trusted base for Keccak semantics and the shape of its extern result. No cryptographic soundness claim — that's inherited from the FORS scheme, not re-proved.
 
 We're certifying the *deployed hand-written contract* (**route B**: prove its inline-assembly refines a clean Lean model via EVMYulLean), not shipping a verified-by-construction replacement (route A). See [the task](/solean-learn/task/) for why, and [Workstreams](/solean-learn/project/workstreams/) for where each piece lives.
 
@@ -36,9 +36,12 @@ contract (`tree_loop_run` + `Phase4Accept`, inside `phase4_forsRefines`), so
 re-proving it for the auxiliary Verity kernel would duplicate that whole
 induction on a reference artifact. See `Bridge/OBLIGATIONS.md` for the rationale.
 
-Phase 5 has started: the five bundled shape-specific Keccak axioms have been
-replaced by one generic `evm_keccak_transcript` assumption over a proved
-canonical encoder. The active frontier is now the remaining FFI/codec trust.
+Phase 5's main trust reduction has landed. The five bundled shape-specific
+Keccak axioms are one generic `evm_keccak_transcript` assumption over a proved
+canonical encoder; all three zero-padding specs and both word-codec facts are
+now theorems. The generic Keccak numeric bound is also proved from a single
+extern-shape assumption, `ffi_kec_size`. The final theorem now depends on exactly
+two project axioms.
 
 ## Phase 0 — Onboarding & scoping ✅
 - This learning guide (T1–T6) stood up.
@@ -66,7 +69,7 @@ The shapes prove "each hash step is the right one." Phase 4 connects them to the
 - ✅ **`evmRun` built — and a vacuity bug caught & fixed.** It was running the dispatcher on an empty account map, so the `recover` call hit `MissingContract` and `evmRun ≡ 0` for every input (would have made the goal *false*). Fixed by installing the contract at `codeOwner`.
 - ✅ **Refinement spine** (`Bridge/Refinement.lean`): `forsRefines_of_branches` reduces `ForsRefines` to three named interpreter facts — `h_len` / `h_guard` (reject paths → `address(0)`) and `h_accept` (the recovery happy path). Zero added trust.
 - ✅ **Complete interpreter-stepping foundation**: every construct in the dispatcher + `fun_recover` has a `sorry`-free reduction lemma — control flow, all 14 pure builtins, the 7 stateful ops (`calldataload`/`mstore`/`keccak256`/`return`/`revert`/…), user-`call`/`switch`, and nested-expression composition (`Bridge/Interp*.lean`).
-- ✅ **`calldataload` byte-reasoning library** (`Bridge/CalldataBytes.lean`): `readBytes` over `copySlice`+`ffi.zeroes` and extraction over `encodeForsCalldata`'s layout — proves `calldatasize = 2548`, selector `= 0x1aad75c5`, `calldataload 4 = 0x40`, `calldataload 36 = digest`, `calldataload 0x44 = raw.len`, and the payload chunk reads. Uses one new (pending-upstream) word-codec axiom.
+- ✅ **`calldataload` byte-reasoning library** (`Bridge/CalldataBytes.lean`): `readBytes` over `copySlice`+`ffi.zeroes` and extraction over `encodeForsCalldata`'s layout — proves `calldatasize = 2548`, selector `= 0x1aad75c5`, `calldataload 4 = 0x40`, `calldataload 36 = digest`, `calldataload 0x44 = raw.len`, and the payload chunk reads. Its padding and word-codec dependencies are now proved.
 - ✅ **Dispatcher trace into early `fun_recover`** (`Bridge/ClassA*.lean`): the `recover(bytes,bytes32)` path symbolically executes through free-mem-ptr init, all selector/guard reads, `offset = 0x40`, `length = raw.len`, the good-length specialization to `SigLen`, `constant_FORS_SIG_LEN() = SigLen`, and the masked pkSeed/R/counter reads inside `fun_recover`.
 - ✅ **Soundness scoping** (`Bridge/RawDomain.lean`): `ForsAbiInput` covers representable length, packed 16-byte fields, and a bytes32-sized digest. This is a correctness fix: the old length-only theorem was false for unbounded model `Nat` values because ABI encoding truncates them.
 - ✅ **The full 25-tree loop is proved** (`Bridge/Tree*.lean`): symbolic execution of all six hashes per iteration, the loop invariant, pointer/index arithmetic, the 25-step induction, and all 25 root-buffer writes are closed end to end. The proof is `sorry`-free and uses only the documented trust surface.
@@ -95,13 +98,18 @@ The shapes prove "each hash step is the right one." Phase 4 connects them to the
   match the deployed EVM word sequences. `keccakHash16` and `keccakAddress` are
   proved masks of one shared opaque `keccakWord`; five bundled bridge axioms are
   replaced by one `evm_keccak_transcript`.
-- **Upstream PR** to `lfglabs-dev/EVMYulLean` exposing the private word-codec lemmas and a keccak-size fact, to discharge `uint256_toByteArray_size`, `uint256_toByteArray_roundtrip`, and `ffi_kec_lt`.
+- ✅ **Padding and codec assumptions discharged:** `ffi_zeroes_{size,get!,eq_empty}`
+  and `uint256_toByteArray_{size,roundtrip}` are kernel-checked theorems.
+- ✅ **Keccak bound narrowed:** `ffi_kec_lt` is a theorem derived from the one
+  FFI shape contract `(ffi.KEC b).size = 32`.
+- 🔄 **Upstream hardening:** expose a public EVMYulLean word-codec theorem so the
+  local proof no longer applies a private declaration by generated name; decide
+  whether `ffi_kec_size` remains the explicit extern-C contract or is connected
+  to a modeled Keccak implementation.
 
-The current development branch declares **7 explicit labeled axioms**: 1
-generic Keccak bridge, 3 FFI padding specs, 2 word-codec specs, and 1
-keccak-output bound. `phase4_forsRefines` depends on 6 of them
-(`ffi_zeroes_get!` is not in its dependency closure). None is a cryptographic
-hardness assumption; everything else checks to Lean's core.
+The current development branch declares **2 explicit labeled axioms**:
+`evm_keccak_transcript` and `ffi_kec_size`. `phase4_forsRefines` depends on both.
+Neither is a cryptographic-hardness claim; everything else checks to Lean's core.
 
 ## Phase 6 — SoLean integration & report ⏳
 - Wire the proved FORS theorem into SoLean's `PQVerifierWrapper` (refine its placeholder `signature : UInt256` to a real `RawSig`).
@@ -137,6 +145,8 @@ So this does **not** obsolete our work. It gives us:
 kernel-loop choreography obligations are held as a documented boundary — already
 proven for the deployed contract). `phase4_forsRefines` is green, and
 `lake build NiceTry` passes all 1172 modules. Dispatcher routing and the
-transcript-encoding/masking split are proved; the remaining critical path is to
-upstream or discharge the codec/FFI facts. See `Bridge/PICKUP.md` and
+transcript-encoding/masking split are proved; all padding/codec facts are proved,
+and the final theorem's project trust base is exactly
+`evm_keccak_transcript + ffi_kec_size`. Phase 5 now focuses on upstream API
+hardening and the long-term treatment of that extern shape contract. See `Bridge/PICKUP.md` and
 `Bridge/OBLIGATIONS.md`.
