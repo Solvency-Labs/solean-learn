@@ -10,8 +10,11 @@ A lightweight, append-only record of **decisions** and **open questions**. Newes
 These are live. Claim one, resolve it, then move it to "Decisions" with the outcome.
 
 1. **Antonio sign-off** — confirm route B + the proposed "verified" bar
-   (deployed refinement with the explicit two-item Keccak boundary; auxiliary
-   kernel-loop obligations documented separately). *(pending; drafted)*
+   (full refinement of the reviewed optimized-IR transcription, with the
+   explicit two-item Keccak boundary; auxiliary kernel-loop obligations
+   documented separately). The reviewer package is now
+   published in the [verification report](/solean-learn/project/verification-report/).
+   *(pending Antonio's decision)*
 2. **[workstream] upstream hardening** — expose a public EVMYulLean word-codec
    theorem to replace the local private-name hook; assess whether the 32-byte
    `ffi.KEC` extern contract should remain explicit or link to modeled Keccak.
@@ -20,6 +23,15 @@ These are live. Claim one, resolve it, then move it to "Decisions" with the outc
    a separate duplicate loop proof.
 
 ## Decisions
+
+### 2026-06-14 — Antonio verification package is reproducible
+The canonical report now states the exact `phase4_forsRefines` claim, ABI
+domain, two project assumptions, non-claims, and optimized-IR transcription
+boundary. `scripts/audit-fors-verifier.sh` pins the Solidity source, regenerated
+optimized IR, and Lean runtime fingerprints, then builds all 1,172 modules and
+prints the final axiom closure. The remaining reviewer decision is whether the
+reviewed transcription boundary is acceptable or must be replaced by a
+compiler-output-to-EVMYulLean certificate.
 
 ### 2026-06-14 — padding and codec axioms are discharged; trust base is two
 `EvmFfiSpec.lean` now proves the three `ffi.ByteArray.zeroes` facts and both
@@ -68,9 +80,10 @@ It covers full C13 and SLH-DSA-style verifiers, including FORS/FORS+C,
 WOTS+/WOTS+C, and hypertree verification. Its own README says the production
 assembly is hand-transcribed into non-deployed Verity models and correspondence
 to the code rests on review. Our scope is narrower (the FORS+C verifier), but
-route B targets the stronger deployed-code boundary through EVMYulLean. Treat
-the projects as complementary and mine their full-scheme proof structure for
-reusable patterns.
+route B proves the complete reviewed optimized-IR runtime execution, including
+dispatcher and reject paths, through EVMYulLean. The source-to-transcription
+link remains review-based. Treat the projects as complementary and mine their
+full-scheme proof structure for reusable patterns.
 
 ### 2026-06-13 — the real 25-tree interpreter loop is proved
 The `agent/tree-loop-A2` branch closes the complete 25-iteration `fun_recover` loop: six hashes per tree, loop-state induction, pointer/index arithmetic, calldata-to-model opening values, and all 25 root-buffer writes. Post-loop roots/address machinery is also proved. The live frontier is the pre-loop statement trace and final `h_accept` composition, not the tree induction. `lake build NiceTry` passes all 1164 modules.

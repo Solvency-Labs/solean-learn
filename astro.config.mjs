@@ -44,6 +44,7 @@ export default defineConfig({
 					label: 'Project',
 					items: [
 						{ label: 'Roadmap', slug: 'project/roadmap' },
+						{ label: 'Verification report', slug: 'project/verification-report' },
 						{ label: 'Workstreams & repos', slug: 'project/workstreams' },
 						{ label: 'Changelog', slug: 'project/changelog' },
 						{ label: 'Project log', slug: 'reference/project-log' },

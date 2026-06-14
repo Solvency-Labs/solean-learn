@@ -3,9 +3,9 @@ title: Roadmap
 description: Where we are and where we're going — the phased plan to certify ForsVerifier.sol, with current status.
 ---
 
-The north star: **a formal proof that `ForsVerifier.sol` correctly implements FORS+C recovery**, conditional on a small, explicit trusted base for Keccak semantics and the shape of its extern result. No cryptographic soundness claim — that's inherited from the FORS scheme, not re-proved.
+The north star: **a formal proof that `ForsVerifier.sol` correctly implements FORS+C recovery**, conditional on a small, explicit trusted base for Keccak semantics and the shape of its extern result. The current theorem closes the complete reviewed optimized-IR transcription; linking that transcription to compiler output is the remaining provenance boundary. No cryptographic soundness claim — that's inherited from the FORS scheme, not re-proved.
 
-We're certifying the *deployed hand-written contract* (**route B**: prove its inline-assembly refines a clean Lean model via EVMYulLean), not shipping a verified-by-construction replacement (route A). See [the task](/solean-learn/task/) for why, and [Workstreams](/solean-learn/project/workstreams/) for where each piece lives.
+We're certifying the hand-written verifier via **route B**: execute a reviewed transcription of its optimized Yul in EVMYulLean and prove refinement to a clean Lean model, rather than shipping a verified-by-construction replacement (route A). See [the task](/solean-learn/task/) for why, [the verification report](/solean-learn/project/verification-report/) for the exact claim, and [Workstreams](/solean-learn/project/workstreams/) for where each piece lives.
 
 Status legend: ✅ done · 🔄 in progress · 🔜 next · ⏳ later
 
@@ -13,13 +13,14 @@ Status legend: ✅ done · 🔄 in progress · 🔜 next · ⏳ later
 
 **Phase 4 is complete, and the Verity obligation accounting is now 9 of 11
 discharged with real Lean proofs.** `Bridge/Phase4.lean` exports
-`phase4_forsRefines : ForsRefines`: the deployed verifier observable agrees with
-the Lean `recoverRaw?` model on the exact ABI-representable input domain.
+`phase4_forsRefines : ForsRefines`: the reviewed optimized-IR runtime
+transcription agrees with the Lean `recoverRaw?` model on the exact
+ABI-representable input domain.
 
 The proof closes all three branches: malformed length returns zero, failed
 forced-zero grinding returns zero through the real `YulHalt` path, and acceptance
 executes the hmsg prefix, all 25 FORS trees, roots compression, low-160 address
-derivation, and final return. The deployed selector switch, ABI guards, and call
+derivation, and final return. The transcribed selector switch, ABI guards, and call
 into `fun_recover` are now proved too: `dispatcher_routes_to_recover` is a
 theorem, not an assumption. `lake build NiceTry` passes all 1172 modules.
 
@@ -64,8 +65,8 @@ two project axioms.
 - **Roots → `recoverRoot` handoff** (proved): `roots_derivation_eq_recoverRoot_of_hash_chains_after_loop_buffer_init` rewrites the six per-tree hash-chain results into the model's final root recovery. The loop now proves those chain values; final execution composition remains.
 - `Bridge/MemoryLayout.lean` — Class-C layout/non-overlap facts (the contract's `_GUARD`s) (proved).
 
-## Phase 4 — Full-contract execution: `ForsRefines` ✅
-The shapes prove "each hash step is the right one." Phase 4 connects them to the **real interpreter running `ForsVerifier.sol`**.
+## Phase 4 — Full-runtime execution: `ForsRefines` ✅
+The shapes prove "each hash step is the right one." Phase 4 connects them to EVMYulLean executing the complete reviewed optimized-IR transcription.
 - ✅ **`evmRun` built — and a vacuity bug caught & fixed.** It was running the dispatcher on an empty account map, so the `recover` call hit `MissingContract` and `evmRun ≡ 0` for every input (would have made the goal *false*). Fixed by installing the contract at `codeOwner`.
 - ✅ **Refinement spine** (`Bridge/Refinement.lean`): `forsRefines_of_branches` reduces `ForsRefines` to three named interpreter facts — `h_len` / `h_guard` (reject paths → `address(0)`) and `h_accept` (the recovery happy path). Zero added trust.
 - ✅ **Complete interpreter-stepping foundation**: every construct in the dispatcher + `fun_recover` has a `sorry`-free reduction lemma — control flow, all 14 pure builtins, the 7 stateful ops (`calldataload`/`mstore`/`keccak256`/`return`/`revert`/…), user-`call`/`switch`, and nested-expression composition (`Bridge/Interp*.lean`).
@@ -80,7 +81,7 @@ The shapes prove "each hash step is the right one." Phase 4 connects them to the
 - ✅ **Header/model boundary glue**: pkSeed, R, counter, digest, and hmsg are connected to `decodeTyped raw`/`dValOf`; both forced-zero guard directions are proved.
 - ✅ **`h_accept` assembled**: the real scoped call reaches the model address through the complete loop and post-loop return trace.
 - ✅ **`h_len` / `h_guard` assembled**: malformed length and forced-zero rejection return `address(0)`.
-- ✅ **Full deployed dispatcher route proved** (`Bridge/DispatcherRoute.lean`):
+- ✅ **Full dispatcher route proved** (`Bridge/DispatcherRoute.lean`):
   exact selector/ABI-guard execution, eager switch composition, the
   `fun_recover(100, raw.len, digest)` call, and malformed-length revert/out-of-fuel
   outcomes. `dispatcher_routes_to_recover` is no longer an axiom.
@@ -90,7 +91,7 @@ The shapes prove "each hash step is the right one." Phase 4 connects them to the
   `.assumed → .proved`: all keccak-transcript memory facts (leaf/node/hmsg/roots/address)
   and both Class-A calldata facts. The 2 Class-C kernel-loop choreography
   obligations are **held as a documented boundary** — the equivalent proof is
-  already complete for the deployed contract.
+  already complete for the reviewed runtime transcription.
 
 ## Phase 5 — Trust-surface reduction & upstream 🔄
 - ✅ **Gap-B split complete:** `TranscriptEncoding.lean` defines the canonical
@@ -111,9 +112,17 @@ The current development branch declares **2 explicit labeled axioms**:
 `evm_keccak_transcript` and `ffi_kec_size`. `phase4_forsRefines` depends on both.
 Neither is a cryptographic-hardness claim; everything else checks to Lean's core.
 
-## Phase 6 — SoLean integration & report ⏳
-- Wire the proved FORS theorem into SoLean's `PQVerifierWrapper` (refine its placeholder `signature : UInt256` to a real `RawSig`).
-- Final write-up + hand back to Antonio.
+## Phase 6 — Antonio review & provenance closure 🔄
+- ✅ Publish the [verification report](/solean-learn/project/verification-report/)
+  with the exact theorem, ABI domain, two-item trust base, runtime fingerprints,
+  audit command, non-claims, and sign-off checklist.
+- 🔄 Obtain Antonio's decision on the two Keccak boundary assumptions and the
+  reviewed optimized-IR transcription.
+- 🔜 If required, derive or certify the EVMYulLean runtime AST directly from
+  pinned compiler output. This is a provenance task; the FORS execution proof
+  does not need to be repeated.
+- ⏳ SoLean wallet integration is deferred and is not part of Antonio's FORS
+  verifier sign-off.
 
 ## External landscape — SPHINCS- Verity work
 
@@ -126,16 +135,18 @@ The assurance boundaries differ. Their own Verity README says the Solidity
 assembly is hand-transcribed into models that are not deployed, compiled into
 the production contracts, or replayed against them; correspondence to production
 rests on reviewing the transcription. Our project is narrower, but its route-B
-goal is stronger at that boundary: symbolically execute the deployed
-`ForsVerifier.sol` runtime in EVMYulLean and prove it refines the Lean FORS+C
-model.
+result executes the complete reviewed optimized-IR transcription in
+EVMYulLean, including dispatcher and reject paths, and proves it refines the
+Lean FORS+C model. The source-to-transcription correspondence is still a review
+boundary and is now fingerprinted explicitly.
 
 So this does **not** obsolete our work. It gives us:
 
 - a useful independent full-scheme reference for FORS+C, WOTS+C, and hypertree
   structure;
 - proof and parameterization patterns worth comparing or reusing;
-- a sharper project claim: **deployed-code refinement for the FORS+C verifier**,
+- a sharper project claim: **full-runtime refinement for the FORS+C verifier's
+  reviewed optimized-IR transcription**,
   complementary to their broader **hand-transcribed model-to-spec proof**.
 
 ---
@@ -143,10 +154,11 @@ So this does **not** obsolete our work. It gives us:
 **Now:** Phase 4 is complete on `agent/phase4-integration`, and 9 of 11 Verity
 `local_obligations` are discharged with real Lean theorems (the 2 Class-C
 kernel-loop choreography obligations are held as a documented boundary — already
-proven for the deployed contract). `phase4_forsRefines` is green, and
+proven for the reviewed runtime transcription). `phase4_forsRefines` is green, and
 `lake build NiceTry` passes all 1172 modules. Dispatcher routing and the
 transcript-encoding/masking split are proved; all padding/codec facts are proved,
 and the final theorem's project trust base is exactly
 `evm_keccak_transcript + ffi_kec_size`. Phase 5 now focuses on upstream API
-hardening and the long-term treatment of that extern shape contract. See `Bridge/PICKUP.md` and
-`Bridge/OBLIGATIONS.md`.
+hardening and the long-term treatment of that extern shape contract. The
+Antonio-facing package is published in the
+[verification report](/solean-learn/project/verification-report/).

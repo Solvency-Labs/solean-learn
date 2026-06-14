@@ -5,6 +5,19 @@ description: Dated, team-facing updates — what shipped, what changed, what's n
 
 Bigger-picture than the append-only [Project log](/solean-learn/reference/project-log/) (which is decisions + open questions). This is the "what happened and what it means for you" feed.
 
+## 2026-06-14 — Antonio reviewer package published
+
+The [verification report](/solean-learn/project/verification-report/) now gives
+one precise claim for review: complete functional refinement of the reviewed
+optimized-Yul transcription, on the exact ABI domain, under
+`evm_keccak_transcript` and `ffi_kec_size`.
+
+The repository adds a one-command audit that fingerprints the Solidity source,
+regenerated optimized IR, and Lean runtime, builds all 1,172 modules, and prints
+the final theorem's assumptions. The report is explicit that fingerprinting
+makes the transcription review reproducible but does not itself prove
+Solidity-to-EVMYul semantic equality.
+
 ## 2026-06-14 — Phase 5 trust base drops from seven axioms to two
 
 The three `ffi.ByteArray.zeroes` specifications and both
