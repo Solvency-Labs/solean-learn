@@ -63,7 +63,10 @@ The branch builds green; individual completion status is noted below and in the 
 - `EvmMemory.lean` — `MachineState.mstore` → keccak-input bytes.
 - `AddressShape.lean` — **all five transcript shapes** closed EVM→model (address/hmsg/leaf/node/roots) + the roots→`recoverRoot` handoff skeleton.
 - `EvmFfiSpec.lean`, `InterpKeccak.lean`, `AddressShape.lean` — the explicit
-  trusted-spec layer (11 labeled project axioms declared on the current branch).
+  trusted-spec layer (7 labeled project axioms declared on the current branch).
+- **`TranscriptEncoding.lean`** — canonical transcript bytes plus proved
+  address/hmsg/leaf/node/roots encoding equalities; five bundled Keccak axioms
+  are reduced to one generic `evm_keccak_transcript`.
 - **`Refinement.lean`** — reduces `ForsRefines` to three named execution facts (`h_len`/`h_guard`/`h_accept`); zero added trust.
 - **`Phase4Accept.lean`, `Phase4Reject.lean`, `Phase4.lean`** — close the three
   execution branches and export `phase4_forsRefines : ForsRefines`.
@@ -78,8 +81,8 @@ The branch builds green; individual completion status is noted below and in the 
 - **`TreeEntry.lean`, `TreeEntryFront.lean`** — the complete statement-level pre-loop trace through the hmsg stores, forced-zero skip, loop-variable initialization, and `LoopInv 0`.
 - `OBLIGATIONS.md`, `CLASS-M.md` — the discharge plan + the three-layer architecture.
 
-The current open edge is trust reduction: split the bundled keccak/encoding
-assumptions and upstream the codec/FFI facts. Nine of eleven Verity
+The current open edge is trust reduction: upstream the codec/FFI facts. The
+bundled keccak/encoding assumptions are already split. Nine of eleven Verity
 `local_obligations` are discharged; the two kernel-loop choreography labels are
 held as a documented auxiliary-artifact boundary.
 
@@ -87,7 +90,8 @@ held as a documented auxiliary-artifact boundary.
 
 Everything checks down to Lean's core (`propext`, `Classical.choice`, `Quot.sound`) **plus** these explicit, labeled assumptions — keep this list short and honest:
 
-- **keccak shape bridges** (×5) — trusted, not proved (kickoff decision); these currently also bundle transcript encoding/masking and are planned to be split.
+- **generic Keccak bridge** (×1) — `evm_keccak_transcript`; the canonical
+  transcript encoding and output masking are proved.
 - **`ffi.ByteArray.zeroes` specs** (×3) — total-correctness of the opaque EVM memory-padding primitive.
 - **word-codec specs** (×2) — `uint256_toByteArray_size` and `uint256_toByteArray_roundtrip`, both blocked on private upstream lemmas.
 - **keccak output bound** (×1) — `ffi_kec_lt`, a total-correctness fact for the opaque FFI.

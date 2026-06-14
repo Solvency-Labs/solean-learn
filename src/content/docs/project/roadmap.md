@@ -21,7 +21,7 @@ forced-zero grinding returns zero through the real `YulHalt` path, and acceptanc
 executes the hmsg prefix, all 25 FORS trees, roots compression, low-160 address
 derivation, and final return. The deployed selector switch, ABI guards, and call
 into `fun_recover` are now proved too: `dispatcher_routes_to_recover` is a
-theorem, not an assumption. `lake build NiceTry` passes all 1171 modules.
+theorem, not an assumption. `lake build NiceTry` passes all 1172 modules.
 
 **Verity `local_obligations` — 9 of 11 discharged (2026-06-14).** Every
 keccak-transcript memory obligation (leaf, node, hmsg, roots, address) and both
@@ -36,7 +36,9 @@ contract (`tree_loop_run` + `Phase4Accept`, inside `phase4_forsRefines`), so
 re-proving it for the auxiliary Verity kernel would duplicate that whole
 induction on a reference artifact. See `Bridge/OBLIGATIONS.md` for the rationale.
 
-The active frontier is Phase 5: shrink the remaining keccak/FFI trust surface.
+Phase 5 has started: the five bundled shape-specific Keccak axioms have been
+replaced by one generic `evm_keccak_transcript` assumption over a proved
+canonical encoder. The active frontier is now the remaining FFI/codec trust.
 
 ## Phase 0 — Onboarding & scoping ✅
 - This learning guide (T1–T6) stood up.
@@ -88,12 +90,16 @@ The shapes prove "each hash step is the right one." Phase 4 connects them to the
   already complete for the deployed contract.
 
 ## Phase 5 — Trust-surface reduction & upstream 🔄
-- Split all five `evm_keccak_*` bridges into keccak-only axioms plus proved transcript encoding/masking lemmas (Gap B).
+- ✅ **Gap-B split complete:** `TranscriptEncoding.lean` defines the canonical
+  byte encoding for every transcript field and proves address/hmsg/leaf/node/roots
+  match the deployed EVM word sequences. `keccakHash16` and `keccakAddress` are
+  proved masks of one shared opaque `keccakWord`; five bundled bridge axioms are
+  replaced by one `evm_keccak_transcript`.
 - **Upstream PR** to `lfglabs-dev/EVMYulLean` exposing the private word-codec lemmas and a keccak-size fact, to discharge `uint256_toByteArray_size`, `uint256_toByteArray_roundtrip`, and `ffi_kec_lt`.
 
-The current development branch declares **11 explicit labeled axioms**: 5
-keccak-shape bridges, 3 FFI padding specs, 2 word-codec specs, and 1
-keccak-output bound. `phase4_forsRefines` depends on 10 of them
+The current development branch declares **7 explicit labeled axioms**: 1
+generic Keccak bridge, 3 FFI padding specs, 2 word-codec specs, and 1
+keccak-output bound. `phase4_forsRefines` depends on 6 of them
 (`ffi_zeroes_get!` is not in its dependency closure). None is a cryptographic
 hardness assumption; everything else checks to Lean's core.
 
@@ -130,6 +136,7 @@ So this does **not** obsolete our work. It gives us:
 `local_obligations` are discharged with real Lean theorems (the 2 Class-C
 kernel-loop choreography obligations are held as a documented boundary — already
 proven for the deployed contract). `phase4_forsRefines` is green, and
-`lake build NiceTry` passes all 1171 modules. Dispatcher routing is proved; the
-remaining critical path is to split the bundled keccak bridges and upstream the
-codec/FFI facts. See `Bridge/PICKUP.md` and `Bridge/OBLIGATIONS.md`.
+`lake build NiceTry` passes all 1172 modules. Dispatcher routing and the
+transcript-encoding/masking split are proved; the remaining critical path is to
+upstream or discharge the codec/FFI facts. See `Bridge/PICKUP.md` and
+`Bridge/OBLIGATIONS.md`.

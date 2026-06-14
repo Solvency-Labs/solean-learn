@@ -5,6 +5,19 @@ description: Dated, team-facing updates — what shipped, what changed, what's n
 
 Bigger-picture than the append-only [Project log](/solean-learn/reference/project-log/) (which is decisions + open questions). This is the "what happened and what it means for you" feed.
 
+## 2026-06-14 — Phase 5 starts: five Keccak bridge axioms reduced to one
+
+`TranscriptEncoding.lean` now defines the canonical byte encoding of model
+transcripts and proves that the deployed address, hmsg, leaf, node, and roots
+word sequences match it. The model has one opaque `keccakWord`;
+`keccakHash16` and `keccakAddress` are definitions applying the high-128 and
+low-160 masks.
+
+The five bundled `evm_keccak_{address,hmsg,leaf,node,roots}` axioms are now
+ordinary theorems derived from one generic `evm_keccak_transcript` assumption.
+`lake build NiceTry` passes all 1172 modules. The branch declares 7 project
+axioms, down from 11; `phase4_forsRefines` uses 6, down from 10.
+
 ## 2026-06-14 — Dispatcher routing proved; Phase 4 no longer rests on a routing axiom
 
 **TL;DR.** `Bridge/DispatcherRoute.lean` proves

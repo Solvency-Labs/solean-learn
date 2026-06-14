@@ -10,13 +10,19 @@ A lightweight, append-only record of **decisions** and **open questions**. Newes
 These are live. Claim one, resolve it, then move it to "Decisions" with the outcome.
 
 1. **Antonio sign-off** — confirm route B + the proposed "verified" bar (full refinement, no `assumed`, with an explicit keccak + EVM-memory-primitive trusted base). *(pending; drafted)*
-2. **[workstream] Gap-B split** — separate the five `evm_keccak_*` assumptions into keccak-only axioms plus proved transcript encoding/masking lemmas.
-3. **[workstream] upstream PR** — expose EVMYulLean's private word-codec/keccak-size lemmas to discharge `uint256_toByteArray_size`, `uint256_toByteArray_roundtrip`, and `ffi_kec_lt`.
-4. **[decision] Verity kernel boundary** — decide whether the two held
+2. **[workstream] upstream PR** — expose EVMYulLean's private word-codec/keccak-size lemmas to discharge `uint256_toByteArray_size`, `uint256_toByteArray_roundtrip`, and `ffi_kec_lt`.
+3. **[decision] Verity kernel boundary** — decide whether the two held
    auxiliary-kernel choreography obligations should remain documented or receive
    a separate duplicate loop proof.
 
 ## Decisions
+
+### 2026-06-14 — Gap B is split; five Keccak axioms become one
+`TranscriptEncoding.lean` proves the concrete EVM bytes for all five transcript
+shapes, while `Hash.lean` defines hash16/address outputs as masks of one opaque
+Keccak word. The only cryptographic bridge is now
+`evm_keccak_transcript`. The declared project trust base drops from 11 axioms to
+7, and `phase4_forsRefines` uses 6. `lake build NiceTry` passes all 1172 modules.
 
 ### 2026-06-14 — deployed dispatcher routing is proved
 `Bridge/DispatcherRoute.lean` proves `dispatcher_routes_to_recover` by executing
