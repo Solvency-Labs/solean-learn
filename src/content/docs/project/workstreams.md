@@ -48,7 +48,9 @@ lake build NiceTry.Fors.Bridge.AddressShape
 
 > ⚠️ **Always build the named target `NiceTry`.** A bare `lake build` compiles *nothing* (the lakefile has no `@[default_target]`) and still exits 0 — a false green. After touching a proof, also re-run `#print axioms <thm>` to confirm the trust surface is unchanged.
 
-Work on a branch, open a PR into `evmrun-runtime` on the fork. Keep proofs **`sorry`-free**; if you add an assumption, make it an explicit `axiom` in a labeled section and note it in the [trust surface](#trust-surface).
+Branch from `agent/phase4-integration` on the fork. Keep proofs **`sorry`-free**;
+if you add an assumption, make it an explicit `axiom` in a labeled section and
+note it in the [trust surface](#trust-surface).
 
 ## What's in `Bridge/` today
 
@@ -60,10 +62,13 @@ The branch builds green; individual completion status is noted below and in the 
 - `ByteArrayLemmas.lean` — the `ByteArray.write`/`readWithPadding` library + `writeWords32_data`.
 - `EvmMemory.lean` — `MachineState.mstore` → keccak-input bytes.
 - `AddressShape.lean` — **all five transcript shapes** closed EVM→model (address/hmsg/leaf/node/roots) + the roots→`recoverRoot` handoff skeleton.
-- `EvmFfiSpec.lean`, `InterpKeccak.lean`, `EvmRunRecover.lean` — the explicit trusted-spec layer (12 labeled axioms on the current branch).
+- `EvmFfiSpec.lean`, `InterpKeccak.lean`, `AddressShape.lean` — the explicit
+  trusted-spec layer (11 labeled project axioms declared on the current branch).
 - **`Refinement.lean`** — reduces `ForsRefines` to three named execution facts (`h_len`/`h_guard`/`h_accept`); zero added trust.
 - **`Phase4Accept.lean`, `Phase4Reject.lean`, `Phase4.lean`** — close the three
   execution branches and export `phase4_forsRefines : ForsRefines`.
+- **`DispatcherRoute.lean`** — proves the deployed selector/ABI route into
+  `fun_recover`; `dispatcher_routes_to_recover` is a theorem, not an assumption.
 - **`ForsRuntime.lean`, `EvmRun.lean`** — the deployed contract transcribed to the EVMYulLean DSL + `evmRun` (the interpreter invocation; account-install bug fixed).
 - **`Interp.lean`, `InterpOps.lean`, `InterpState.lean`, `InterpCall.lean`, `InterpEval.lean`** — the interpreter-stepping foundation: reduction lemmas for every construct in the dispatcher + `fun_recover` (control flow, builtins, stateful ops, user-calls/switch, expression composition).
 - **`TreeLeaf.lean` through `TreeLoop.lean`** — complete symbolic execution and 25-step induction for the real tree loop, including all root-buffer writes.
@@ -73,9 +78,10 @@ The branch builds green; individual completion status is noted below and in the 
 - **`TreeEntry.lean`, `TreeEntryFront.lean`** — the complete statement-level pre-loop trace through the hmsg stores, forced-zero skip, loop-variable initialization, and `LoopInv 0`.
 - `OBLIGATIONS.md`, `CLASS-M.md` — the discharge plan + the three-layer architecture.
 
-The current open edge is trust reduction: replace dispatcher routing with a
-theorem, split the bundled keccak/encoding assumptions, upstream the codec/FFI
-facts, and discharge the 12 Verity `local_obligations`.
+The current open edge is trust reduction: split the bundled keccak/encoding
+assumptions and upstream the codec/FFI facts. Nine of eleven Verity
+`local_obligations` are discharged; the two kernel-loop choreography labels are
+held as a documented auxiliary-artifact boundary.
 
 ## Trust surface
 
@@ -85,6 +91,5 @@ Everything checks down to Lean's core (`propext`, `Classical.choice`, `Quot.soun
 - **`ffi.ByteArray.zeroes` specs** (×3) — total-correctness of the opaque EVM memory-padding primitive.
 - **word-codec specs** (×2) — `uint256_toByteArray_size` and `uint256_toByteArray_roundtrip`, both blocked on private upstream lemmas.
 - **keccak output bound** (×1) — `ffi_kec_lt`, a total-correctness fact for the opaque FFI.
-- **dispatcher routing** (×1) — `dispatcher_routes_to_recover`, temporary until the remaining switch/fuel composition is proved.
 
 None of these are cryptographic-hardness assumptions.

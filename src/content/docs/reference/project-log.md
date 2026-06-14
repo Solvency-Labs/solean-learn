@@ -10,12 +10,21 @@ A lightweight, append-only record of **decisions** and **open questions**. Newes
 These are live. Claim one, resolve it, then move it to "Decisions" with the outcome.
 
 1. **Antonio sign-off** — confirm route B + the proposed "verified" bar (full refinement, no `assumed`, with an explicit keccak + EVM-memory-primitive trusted base). *(pending; drafted)*
-2. **[workstream] dispatcher routing** — finish the switch/fuel composition and replace `dispatcher_routes_to_recover` with a theorem.
-3. **[workstream] Gap-B split** — separate the five `evm_keccak_*` assumptions into keccak-only axioms plus proved transcript encoding/masking lemmas.
-4. **[workstream] upstream PR** — expose EVMYulLean's private word-codec/keccak-size lemmas to discharge `uint256_toByteArray_size`, `uint256_toByteArray_roundtrip`, and `ffi_kec_lt`.
-5. **[workstream] Verity accounting** — flip the 12 `local_obligations` from `.assumed` to `.proved`.
+2. **[workstream] Gap-B split** — separate the five `evm_keccak_*` assumptions into keccak-only axioms plus proved transcript encoding/masking lemmas.
+3. **[workstream] upstream PR** — expose EVMYulLean's private word-codec/keccak-size lemmas to discharge `uint256_toByteArray_size`, `uint256_toByteArray_roundtrip`, and `ffi_kec_lt`.
+4. **[decision] Verity kernel boundary** — decide whether the two held
+   auxiliary-kernel choreography obligations should remain documented or receive
+   a separate duplicate loop proof.
 
 ## Decisions
+
+### 2026-06-14 — deployed dispatcher routing is proved
+`Bridge/DispatcherRoute.lean` proves `dispatcher_routes_to_recover` by executing
+the selector switch, ABI bounds guards, and exact-fuel call into `fun_recover`.
+Malformed representable lengths are handled by the concrete revert/out-of-fuel
+outcomes. The temporary routing axiom is gone; `lake build NiceTry` passes all
+1171 modules, and `phase4_forsRefines` audits to Lean core plus 10 existing
+keccak/FFI/codec axioms.
 
 ### 2026-06-13 — Phase 4 deployed refinement is complete
 `Bridge/Phase4.lean` exports `phase4_forsRefines : ForsRefines`. The accept

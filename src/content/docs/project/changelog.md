@@ -5,6 +5,23 @@ description: Dated, team-facing updates — what shipped, what changed, what's n
 
 Bigger-picture than the append-only [Project log](/solean-learn/reference/project-log/) (which is decisions + open questions). This is the "what happened and what it means for you" feed.
 
+## 2026-06-14 — Dispatcher routing proved; Phase 4 no longer rests on a routing axiom
+
+**TL;DR.** `Bridge/DispatcherRoute.lean` proves
+`dispatcher_routes_to_recover`. The full deployed dispatcher now executes
+through selector matching, ABI bounds guards, eager switch composition, and the
+call to `fun_recover(100, raw.len, digest)`.
+
+Malformed representable lengths are covered by the real dispatcher revert paths
+or by the aligned direct call's out-of-fuel outcome; valid lengths reach the same
+recover call with the same fuel. `recoverFuel` is now the exact in-dispatcher
+budget, `99983`, so no fuel-monotonicity axiom is needed.
+
+`lake build NiceTry` passes all 1171 modules. The routing axiom is gone:
+`phase4_forsRefines` now audits to Lean core plus 10 existing
+keccak/FFI/word-codec axioms. The repository declares 11 project axioms globally;
+`ffi_zeroes_get!` is not used by the final theorem.
+
 ## 2026-06-13 — Phase 4 is complete: deployed FORS refinement proved
 
 **TL;DR.** `Bridge/Phase4.lean` now exports
