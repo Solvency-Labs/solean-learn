@@ -24,6 +24,16 @@ These are live. Claim one, resolve it, then move it to "Decisions" with the outc
 
 ## Decisions
 
+### 2026-06-14 — production safety claim split into proof and release gates
+The verifier computation is green, but the production claim is deliberately
+conditional. A release must match the deployed bytecode exactly, use
+recover-and-compare against the current nonzero owner, construct the same
+digest, and enforce the FORS few-time-key lifecycle. The public verification
+report now explains these conditions without formal-methods shorthand, and the
+NiceTry repository includes a byte-for-byte deployment checker. This prevents
+the component theorem from being misrepresented as an unconditional proof of
+the whole wallet system.
+
 ### 2026-06-14 — Antonio verification package is reproducible
 The canonical report now states the exact `phase4_forsRefines` claim, ABI
 domain, two project assumptions, non-claims, and optimized-IR transcription

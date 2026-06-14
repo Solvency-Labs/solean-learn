@@ -3,13 +3,20 @@ title: Roadmap
 description: Where we are and where we're going — the phased plan to certify ForsVerifier.sol, with current status.
 ---
 
-The north star: **a formal proof that `ForsVerifier.sol` correctly implements FORS+C recovery**, conditional on a small, explicit trusted base for Keccak semantics and the shape of its extern result. The current theorem closes the complete reviewed optimized-IR transcription; linking that transcription to compiler output is the remaining provenance boundary. No cryptographic soundness claim — that's inherited from the FORS scheme, not re-proved.
+The north star: **a formal proof that `ForsVerifier.sol` correctly implements FORS+C recovery**, conditional on a small, explicit trusted base for Keccak semantics and the shape of its extern result. The current theorem closes the complete reviewed optimized-IR transcription; linking that transcription to compiler output is the remaining provenance boundary. No cryptographic soundness claim: that is inherited from the FORS scheme, not re-proved.
 
 We're certifying the hand-written verifier via **route B**: execute a reviewed transcription of its optimized Yul in EVMYulLean and prove refinement to a clean Lean model, rather than shipping a verified-by-construction replacement (route A). See [the task](/solean-learn/task/) for why, [the verification report](/solean-learn/project/verification-report/) for the exact claim, and [Workstreams](/solean-learn/project/workstreams/) for where each piece lives.
 
 Status legend: ✅ done · 🔄 in progress · 🔜 next · ⏳ later
 
 ## Current checkpoint — 2026-06-14
+
+**Production verdict: the verifier component is green, conditionally.** We can
+rely on the pinned verifier after an exact deployed-bytecode match, provided the
+wallet compares the recovered address with its current nonzero owner and the
+signer enforces the FORS few-time-key lifecycle. This wording, the unsafe
+nonzero-only pattern, and the full release checklist are now explicit in the
+[verification report](/solean-learn/project/verification-report/).
 
 **Phase 4 is complete, and the Verity obligation accounting is now 9 of 11
 discharged with real Lean proofs.** `Bridge/Phase4.lean` exports
@@ -114,8 +121,13 @@ Neither is a cryptographic-hardness claim; everything else checks to Lean's core
 
 ## Phase 6 — Antonio review & provenance closure 🔄
 - ✅ Publish the [verification report](/solean-learn/project/verification-report/)
-  with the exact theorem, ABI domain, two-item trust base, runtime fingerprints,
-  audit command, non-claims, and sign-off checklist.
+  with a plain-English safety verdict, exact theorem, unsafe and safe caller
+  patterns, ABI domain, two-item trust base, and production checklist.
+- ✅ Add an exact deployed-bytecode checker. It compares the code at a supplied
+  RPC address byte-for-byte with the pinned 1,064-byte runtime and its EVM code
+  hash.
+- 🔜 Run that checker against the actual production or candidate deployment.
+  No deployment address has been recorded in this workspace yet.
 - 🔄 Obtain Antonio's decision on the two Keccak boundary assumptions and the
   reviewed optimized-IR transcription.
 - 🔜 If required, derive or certify the EVMYulLean runtime AST directly from
@@ -153,12 +165,13 @@ So this does **not** obsolete our work. It gives us:
 
 **Now:** Phase 4 is complete on `agent/phase4-integration`, and 9 of 11 Verity
 `local_obligations` are discharged with real Lean theorems (the 2 Class-C
-kernel-loop choreography obligations are held as a documented boundary — already
+kernel-loop choreography obligations are held as a documented boundary, already
 proven for the reviewed runtime transcription). `phase4_forsRefines` is green, and
 `lake build NiceTry` passes all 1172 modules. Dispatcher routing and the
 transcript-encoding/masking split are proved; all padding/codec facts are proved,
 and the final theorem's project trust base is exactly
 `evm_keccak_transcript + ffi_kec_size`. Phase 5 now focuses on upstream API
-hardening and the long-term treatment of that extern shape contract. The
-Antonio-facing package is published in the
-[verification report](/solean-learn/project/verification-report/).
+hardening and the long-term treatment of that extern shape contract. Phase 6
+has a decision-grade safety explanation and deployment identity gate; the live
+remaining steps are checking the actual address and obtaining Antonio's
+provenance-boundary decision.

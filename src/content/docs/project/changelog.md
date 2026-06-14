@@ -5,6 +5,22 @@ description: Dated, team-facing updates — what shipped, what changed, what's n
 
 Bigger-picture than the append-only [Project log](/solean-learn/reference/project-log/) (which is decisions + open questions). This is the "what happened and what it means for you" feed.
 
+## 2026-06-14 — safety verdict and deployment gate made explicit
+
+The Antonio-facing material now answers the practical question directly:
+the pinned FORS verifier is suitable as a production recovery component after
+the deployment and integration checklist passes.
+
+The report explains that `recover` returns an address rather than a boolean.
+Accepting any nonzero result is unsafe; callers must compare the result with the
+current owner. It also separates what Lean proves from the remaining bytecode,
+digest, signer, key-rotation, Keccak, and transcription conditions.
+
+NiceTry now includes
+`scripts/check-deployed-fors-verifier.sh RPC_URL VERIFIER_ADDRESS`, which
+requires the code at the supplied address to match the pinned compiled runtime
+byte-for-byte. This turns deployment identity from prose into a release gate.
+
 ## 2026-06-14 — Antonio reviewer package published
 
 The [verification report](/solean-learn/project/verification-report/) now gives

@@ -1,15 +1,54 @@
 ---
-title: Verification report
-description: The exact FORS+C verifier claim, input domain, assumptions, provenance boundary, and Antonio sign-off checklist.
+title: Is the FORS verifier safe to use?
+description: A plain-English production verdict, the exact proof claim, and the checks required before deployment.
 ---
 
-## Conclusion
+## Short answer
 
-The Lean development proves that the complete EVMYulLean execution of the
-reviewed optimized-Yul transcription of `ForsVerifier.recover` refines the Lean
-FORS+C recovery model on every ABI-representable input.
+**Yes, the pinned `ForsVerifier` is ready to be used as the FORS+C recovery
+component, provided the deployment and integration checks below pass.**
 
-The exported theorem is:
+The Lean proof establishes that the complete reviewed verifier execution
+returns exactly the signer address defined by the FORS+C model. It covers the
+dispatcher, ABI decoding, both rejection paths, all 25 trees, roots
+compression, and the final address.
+
+The exact sentence we can defend is:
+
+> If the deployed `ForsVerifier` bytecode exactly matches the pinned artifact,
+> the wallet accepts only when the recovered address equals its current
+> nonzero owner, and the signer follows the required key-rotation policy, then
+> the verifier enforces the modeled FORS+C recovery algorithm correctly,
+> assuming Ethereum Keccak behaves correctly.
+
+This is a strong component-level result. It is not a proof that every wallet,
+signer, deployment script, or operational process is automatically safe.
+
+## The most important usage rule
+
+`recover(signature, digest)` returns the address implied by the signature. It
+is not a boolean validity check for a particular account.
+
+A malformed signature with the correct length can recover a different nonzero
+address. This is therefore unsafe:
+
+```solidity
+require(verifier.recover(signature, digest) != address(0));
+```
+
+The safe pattern is:
+
+```solidity
+address recovered = verifier.recover(signature, digest);
+require(recovered != address(0) && recovered == currentOwner);
+```
+
+Both `SimpleAccount` and `FrameAccount` in the repository use the safe
+recover-and-compare pattern.
+
+## What has actually been proved
+
+The final theorem is:
 
 ```lean
 phase4_forsRefines : ForsRefines
@@ -18,74 +57,107 @@ phase4_forsRefines : ForsRefines
 Expanded:
 
 ```lean
-∀ raw digest, ForsAbiInput raw digest →
+forall raw digest, ForsAbiInput raw digest ->
   evmRun raw digest = (recoverRaw? raw digest).getD 0
 ```
 
-The proof covers the selector dispatcher, ABI guards, malformed-length
-rejection, Hmsg, the forced-zero grinding guard, all 25 tree openings, roots
-compression, address derivation, and the final return.
+In plain English, for every real ABI-representable signature and digest, the
+complete reviewed verifier runtime returns exactly the address returned by the
+Lean FORS+C model.
 
-## Input domain
+This checks:
 
-`ForsAbiInput` requires:
+1. the correct function selector and dynamic `bytes` argument;
+2. the exact 2,448-byte signature-length rule;
+3. the offsets for `R`, `pkSeed`, counter, and all tree openings;
+4. the Hmsg transcript and forced-zero grinding guard;
+5. all 25 FORS tree reconstructions;
+6. every left/right Merkle sibling decision;
+7. every ADRS tree, level, and node index;
+8. the 25-root compression transcript;
+9. the final low-160-bit Ethereum address;
+10. the zero-return behavior on both rejection paths.
 
-- a signature length representable by one EVM word;
-- all modeled 16-byte chunks to fit their packed ABI representation without
-  truncation;
-- a digest representable by `bytes32`.
+Unlike tests, which sample particular signatures, the theorem covers every
+input in the represented ABI domain.
 
-This restriction is necessary because the Lean model uses unbounded natural
-numbers while EVM words are modulo `2^256`.
+## What kinds of bugs this rules out
 
-## Trust boundary
+For the pinned artifact, the proof rules out implementation mistakes such as:
 
-The final theorem depends on Lean core plus exactly two project axioms:
+- reading signature fields from the wrong calldata offsets;
+- truncating or masking a field incorrectly;
+- reversing Merkle children;
+- climbing the wrong tree or wrong node;
+- skipping, repeating, or miscounting a loop iteration;
+- writing roots into the wrong memory slots;
+- hashing the wrong bytes;
+- returning the wrong address bits;
+- bypassing the length or grinding rejection;
+- routing the ABI dispatcher incorrectly.
 
-1. `evm_keccak_transcript`: Keccak on the proved canonical EVM bytes agrees
-   with the model's opaque Keccak word.
-2. `ffi_kec_size`: EVMYulLean's C-backed Keccak function returns 32 bytes.
+These are the low-level assembly failures the verification project was meant
+to eliminate.
 
-Padding, word-codec round trips, the Keccak numeric bound, dispatcher routing,
-and all execution traces are proved theorems.
+## What remains a production condition
 
-## Provenance boundary
+| Condition | Meaning |
+|---|---|
+| Exact deployed bytecode | The contract at the production address must exactly match the pinned compiled runtime. |
+| Safe wallet comparison | The wallet must compare the recovered address with the expected current owner, not merely test for nonzero. |
+| Correct digest | The signer and wallet must agree on exactly what is being signed. |
+| Key rotation | FORS is few-time; keys must be burned or retired and ownership rotated according to policy. |
+| Keccak | The proof assumes the standard Ethereum Keccak primitive behaves correctly. |
+| Runtime transcription | The optimized-Yul to EVMYulLean transcription is reviewed and fingerprinted, but is not yet generated by a kernel-checked compiler bridge. |
+| Wider system | Signer software, EntryPoint behavior, wallet authorization, deployment, and operations need their own review. |
 
-The proof executes `forsVerifierRuntime`, a reviewed transcription of:
+## Release checklist
 
-```bash
-forge inspect src/Verifiers/ForsVerifier.sol:ForsVerifier irOptimized
+Do not call a deployment verified until all of these are green:
+
+1. Run `./scripts/audit-fors-verifier.sh` on the release commit.
+2. Run
+   `./scripts/check-deployed-fors-verifier.sh RPC_URL VERIFIER_ADDRESS`.
+3. Confirm the wallet's immutable verifier is that checked address.
+4. Confirm every caller requires `recovered != address(0)` and
+   `recovered == currentOwner`.
+5. Confirm signer and wallet digest construction match.
+6. Confirm the key burn, bounded-reuse, and owner-rotation policy.
+7. Review and test the signer and wallet integration separately.
+
+## Trust base
+
+The final theorem has no `sorry` and depends on Lean core plus exactly two
+project assumptions:
+
+1. `evm_keccak_transcript`: Keccak of the proved EVM transcript bytes agrees
+   with the model's opaque Keccak value.
+2. `ffi_kec_size`: EVMYulLean's external Keccak result is 32 bytes.
+
+All ABI parsing, memory layout, rejection behavior, loop iterations, Merkle
+ordering, root compression, and address derivation are proved.
+
+## Artifact identity
+
+The release audit pins the Solidity source, optimized IR, Lean runtime, and
+compiled deployed runtime. The pinned full runtime code hash is:
+
+```text
+0x41345cf3e55d977f792efdfee943698c695c544d01d28dc0a9412eb7e3fca113
 ```
 
-The Solidity source, optimized IR, and Lean runtime are fingerprinted by the
-audit script. That detects drift and makes the review reproducible, but hashes
-do not themselves prove semantic equality.
+The deployment checker requires a byte-for-byte match, including compiler
+metadata. This prevents accidentally applying the proof to different code.
 
-Therefore the precise claim is **functional correctness of the reviewed
-optimized-IR transcription**, not yet a kernel-checked Solidity-source or
-deployed-bytecode equivalence.
+## Bottom line for Antonio
 
-## Reproduce
+The FORS verifier computation itself is green.
 
-From the `Solvency-Labs/NiceTry` repository:
+It is reasonable to rely on it in production once the exact deployment has
+been matched and the wallet, signer, digest, and key lifecycle satisfy the
+release checklist. The honest remaining question is whether the reviewed
+optimized-Yul transcription is an acceptable provenance boundary or whether a
+future compiler certificate is required.
 
-```bash
-./scripts/audit-fors-verifier.sh
-```
-
-This checks all three provenance hashes, confirms exactly two declared Bridge
-axioms, builds all 1,172 Lean modules, and prints the final theorem's dependency
-closure.
-
-The canonical report, including fingerprints and the requested sign-off items,
-is
+The full technical report is
 [`Bridge/VERIFICATION_REPORT.md`](https://github.com/Solvency-Labs/NiceTry/blob/agent/phase4-integration/verity/NiceTry/Fors/Bridge/VERIFICATION_REPORT.md).
-
-## Sign-off question
-
-Antonio's decision is now narrow: is this acceptable with the two-item Keccak
-boundary and reviewed optimized-IR transcription?
-
-If the transcription boundary is not acceptable, the next milestone is to
-derive or certify the EVMYulLean AST from pinned compiler output. The FORS
-algorithm and full execution proof do not need to be repeated.
