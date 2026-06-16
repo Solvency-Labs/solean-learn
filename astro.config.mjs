@@ -27,7 +27,7 @@ export default defineConfig({
 				{
 					icon: 'github',
 					label: 'SoLean on GitHub',
-					href: 'https://github.com/RivaLabs-Core/NiceTry',
+					href: 'https://github.com/Solvency-Labs/NiceTry',
 				},
 			],
 			customCss: ['./src/styles/custom.css'],
@@ -45,6 +45,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Roadmap', slug: 'project/roadmap' },
 						{ label: 'Verification report', slug: 'project/verification-report' },
+						{ label: 'Review path', slug: 'project/review-path' },
 						{ label: 'Workstreams & repos', slug: 'project/workstreams' },
 						{ label: 'Changelog', slug: 'project/changelog' },
 						{ label: 'Project log', slug: 'reference/project-log' },

@@ -3,8 +3,8 @@ title: verity
 description: A verified Lean→Yul compiler (the "jardin" project) — and the existing FORS model built with it.
 ---
 
-:::note[Second-hand summary]
-Based on the repos' structure and a first look, not deep use yet. Confirm against source: the compiler [`Th0rgal/verity`](https://github.com/Th0rgal/verity/tree/main/Compiler) and the FORS model on the [`fors-verity-model` branch](https://github.com/RivaLabs-Core/NiceTry/tree/fors-verity-model/verity).
+:::note[Project status]
+The FORS proof now lives on [`Solvency-Labs/NiceTry`](https://github.com/Solvency-Labs/NiceTry/tree/main/verity). The Verity-generated verifier is useful background, but the final deployed-runtime theorem is in the EVMYulLean bridge. Start with the [review path](/solean-learn/project/review-path/).
 :::
 
 > "verity" is the project; *jardin* is the nickname you may have seen in the kickoff notes (the author, Th0rgal, is French — *jardin* = garden).
@@ -17,7 +17,7 @@ Test contracts with names like `ERC20MinimalNativeWitness` and `SimpleStorageNat
 
 ## The part that matters most to us: there's already a FORS model
 
-On `NiceTry`'s **`fors-verity-model`** branch, a `verity/` directory contains a **formally modeled FORS+C recovery kernel** built with verity. From a first look it includes:
+In `NiceTry`'s `verity/` directory, there is a **formally modeled FORS+C recovery model** plus Verity-generated helper kernels. It includes:
 
 - `NiceTry/Fors/Types.lean` — signature structures and constants
 - `NiceTry/Fors/Model.lean` — recovery logic + raw-signature parsing
@@ -26,15 +26,31 @@ On `NiceTry`'s **`fors-verity-model`** branch, a `verity/` directory contains a 
 - `NiceTry/Fors/RawKeccak.lean` — parser bridging raw bytes → typed recovery
 - `NiceTry/Fors/Proofs/` — structural properties, path arithmetic, memory-transcript checks
 
-It compiles to Yul artifacts (guard kernel, tree-shape kernel, tree-keccak kernel, full verifier) and exposes an **ABI-compatible `recover(bytes,bytes32)`** tested against concrete vectors in Foundry.
+It also has generated Yul helper artifacts (guard kernel, tree-shape kernel,
+tree-keccak kernel, full verifier) and Foundry replay tests against concrete
+vectors.
 
 Reported guarantees already include: *non-2448-byte signatures are rejected*, and *a signature can recover a non-zero signer only when the omitted FORS tree index is forced to zero.*
 
 ## Why this is huge for the task
 
-It means the hard **modeling** work — turning FORS into a typed Lean object that compiles to Yul — is **substantially started**. Our task is far more "understand, audit, strengthen, and connect this" than "build from scratch." When we [decided this is a pivot in tooling, not a teardown](/solean-learn/task/), *this* model is the prior art that makes the new tools the right home for the work.
+It means the hard **modeling** work — turning FORS into a typed Lean object — is
+done enough to serve as the clean model for the real verifier proof.
+
+But keep the distinction clear:
+
+- the **real verifier** is `ForsVerifier.sol` compiled to pinned optimized Yul
+  and executed in EVMYulLean;
+- the **Verity-generated verifier** is a helper/reference version.
+
+The helper verifier has its own checklist. Nine of eleven items are proved; the
+two remaining items are about its own large loop and are not dependencies of the
+final theorem about the real verifier.
 
 ## How it relates to the others
 
-- vs. **EVMYulLean**: verity *emits* Yul with proofs about the compilation; EVMYulLean *gives meaning* to Yul. They meet if you interpret verity's output under EVMYulLean's semantics.
-- vs. **SoLean**: SoLean keeps the verifier abstract; verity's FORS model *is* a concrete verifier. The verity proof is a candidate for discharging SoLean's verifier oracle.
+- vs. **EVMYulLean**: verity helps define/prove the clean FORS model and helper
+  kernels; EVMYulLean gives meaning to the real optimized Yul produced from
+  `ForsVerifier.sol`.
+- vs. **SoLean**: SoLean keeps the verifier abstract; the FORS model gives the
+  concrete `recover` behavior that the wallet layer can eventually connect to.

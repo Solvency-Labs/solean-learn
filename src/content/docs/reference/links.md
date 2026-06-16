@@ -7,9 +7,9 @@ Not a link dump. For each item: *what it is* and *what to take from it*. Grouped
 
 ## The task itself (read these first)
 
-- **[`ForsVerifier.sol`](https://github.com/RivaLabs-Core/NiceTry/blob/main/src/Verifiers/ForsVerifier.sol)** — the contract we must verify. Even if it's opaque now, skim it once so the [line-by-line page](/solean-learn/fors/the-contract/) has something to map onto.
-- **[`NiceTry` (main)](https://github.com/RivaLabs-Core/NiceTry/tree/main)** — the repo the contract lives in.
-- **[`NiceTry` @ `fors-verity-model`/verity](https://github.com/RivaLabs-Core/NiceTry/tree/fors-verity-model/verity)** — the existing Lean (verity) model of FORS. The most important secondary source; read after [T5](/solean-learn/tooling/verity/).
+- **[`ForsVerifier.sol`](https://github.com/Solvency-Labs/NiceTry/blob/main/src/Verifiers/ForsVerifier.sol)** — the real verifier contract. Even if it's opaque now, skim it once so the [line-by-line page](/solean-learn/fors/the-contract/) has something to map onto.
+- **[`NiceTry` (Solvency main)](https://github.com/Solvency-Labs/NiceTry/tree/main)** — the current home of the FORS model, bridge proof, review path, and audit script.
+- **[`ReviewSurface.lean`](https://github.com/Solvency-Labs/NiceTry/blob/main/verity/NiceTry/Fors/Bridge/ReviewSurface.lean)** — the small theorem surface reviewers should read first.
 
 ## T1 · Ethereum & the EVM
 

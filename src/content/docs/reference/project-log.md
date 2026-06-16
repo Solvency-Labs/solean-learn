@@ -9,20 +9,27 @@ A lightweight, append-only record of **decisions** and **open questions**. Newes
 
 These are live. Claim one, resolve it, then move it to "Decisions" with the outcome.
 
-1. **Antonio sign-off** — confirm route B + the proposed "verified" bar
-   (full refinement of the reviewed optimized-IR transcription, with the
-   explicit two-item Keccak boundary; auxiliary kernel-loop obligations
-   documented separately). The reviewer package is now
-   published in the [verification report](/solean-learn/project/verification-report/).
+1. **Antonio sign-off** — confirm the proposed "verified" bar
+   (`pinned_yul_runtime_matches_recover_model`, with the explicit two-item
+   Keccak boundary, pinned `solc`, deployment identity, and helper verifier
+   documented separately). The reviewer package is now published in the
+   [review path](/solean-learn/project/review-path/) and
+   [verification report](/solean-learn/project/verification-report/).
    *(pending Antonio's decision)*
 2. **[workstream] upstream hardening** — expose a public EVMYulLean word-codec
    theorem to replace the local private-name hook; assess whether the 32-byte
    `ffi.KEC` extern contract should remain explicit or link to modeled Keccak.
-3. **[decision] Verity kernel boundary** — decide whether the two held
-   auxiliary-kernel choreography obligations should remain documented or receive
-   a separate duplicate loop proof.
 
 ## Decisions
+
+### 2026-06-16 — expose the smallest theorem and demote the helper verifier
+The reviewer-facing claim is now
+`pinned_yul_runtime_matches_recover_model`: the pinned optimized-Yul artifact
+parses to `forsVerifierRuntime`, and that runtime agrees with the clean FORS+C
+model. The Verity-generated verifier is documented as a helper/reference version,
+not the deployed-runtime theorem. Its two remaining loop checklist items stay
+documented background because the same loop behavior is already proved for the
+real verifier.
 
 ### 2026-06-14 — production safety claim split into proof and release gates
 The verifier computation is green, but the production claim is deliberately
@@ -35,13 +42,12 @@ the component theorem from being misrepresented as an unconditional proof of
 the whole wallet system.
 
 ### 2026-06-14 — Antonio verification package is reproducible
-The canonical report now states the exact `phase4_forsRefines` claim, ABI
-domain, two project assumptions, non-claims, and optimized-IR transcription
-boundary. `scripts/audit-fors-verifier.sh` pins the Solidity source, regenerated
-optimized IR, and Lean runtime fingerprints, then builds all 1,172 modules and
-prints the final axiom closure. The remaining reviewer decision is whether the
-reviewed transcription boundary is acceptable or must be replaced by a
-compiler-output-to-EVMYulLean certificate.
+The canonical report states the exact runtime/model refinement claim, ABI
+domain, two project assumptions, and non-claims. `scripts/audit-fors-verifier.sh`
+pins the Solidity source, regenerated optimized IR, Lean runtime, and deployed
+runtime code hash, then builds the Lean target and prints the final axiom
+closure. A later parser theorem closed the optimized-Yul-to-runtime import; the
+remaining provenance boundaries are pinned `solc` and deployed-bytecode identity.
 
 ### 2026-06-14 — padding and codec axioms are discharged; trust base is two
 `EvmFfiSpec.lean` now proves the three `ffi.ByteArray.zeroes` facts and both
@@ -90,10 +96,11 @@ It covers full C13 and SLH-DSA-style verifiers, including FORS/FORS+C,
 WOTS+/WOTS+C, and hypertree verification. Its own README says the production
 assembly is hand-transcribed into non-deployed Verity models and correspondence
 to the code rests on review. Our scope is narrower (the FORS+C verifier), but
-route B proves the complete reviewed optimized-IR runtime execution, including
-dispatcher and reject paths, through EVMYulLean. The source-to-transcription
-link remains review-based. Treat the projects as complementary and mine their
-full-scheme proof structure for reusable patterns.
+route B proves the complete parser-certified optimized-Yul runtime execution,
+including dispatcher and reject paths, through EVMYulLean. The remaining
+provenance boundaries are pinned `solc` and deployed-bytecode identity. Treat
+the projects as complementary and mine their full-scheme proof structure for
+reusable patterns.
 
 ### 2026-06-13 — the real 25-tree interpreter loop is proved
 The `agent/tree-loop-A2` branch closes the complete 25-iteration `fun_recover` loop: six hashes per tree, loop-state induction, pointer/index arithmetic, calldata-to-model opening values, and all 25 root-buffer writes. Post-loop roots/address machinery is also proved. The live frontier is the pre-loop statement trace and final `h_accept` composition, not the tree induction. `lake build NiceTry` passes all 1164 modules.
@@ -104,8 +111,8 @@ We certify the deployed inline-assembly `ForsVerifier.sol` by proving it **refin
 ### 2026-06-01 — "verify" = spec-correctness conditional on trusted keccak
 Target is **functional/spec-correctness** of FORS+C recovery, conditional on keccak being a collision-resistant RO + a small set of EVM memory-primitive specs. **No cryptographic soundness/unforgeability claim** — inherited from the FORS scheme. Settled by the model's own framing (keccak opaque); proposed to Antonio for sign-off. *(Resolves old Q1.)*
 
-### 2026-06-01 — work lives in the NiceTry fork, on `fors-verity-model`
-The verification work (model + our `Bridge/`) lives in **`Solvency-Labs/NiceTry`** (a fork of `RivaLabs-Core/NiceTry`), branch `fors-verity-model`, under `verity/NiceTry/Fors/`. SoLean stays the methodology + oracle-interface layer. See [Workstreams](/solean-learn/project/workstreams/). *(Resolves old Q3.)*
+### 2026-06-01 — work lives in the NiceTry fork
+The verification work (model + our `Bridge/`) lives in **`Solvency-Labs/NiceTry`** (a fork of `RivaLabs-Core/NiceTry`), now on `main`, under `verity/NiceTry/Fors/`. SoLean stays the methodology + oracle-interface layer. See [Workstreams](/solean-learn/project/workstreams/). *(Resolves old Q3.)*
 
 ### 2026-06-01 — model audit: structural proofs closed, 12 obligations open
 The existing verity FORS model has **zero `sorry`** in its structural proofs (decode, forced-zero guard, 25-tree climb, roots compression, address derivation), compiles to Yul, and has a Foundry replay vs the real contract. The open work is **12 `local_obligations`** at the Verity→Yul boundary + no hand-written-contract equivalence. *(Resolves old Q4; old Q5 contract numbers checked against source during the read.)*

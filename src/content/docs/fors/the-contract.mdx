@@ -7,7 +7,7 @@ import Question from '../../../components/Question.astro';
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside type="caution" title="Verify against source">
-The parameters and step-by-step below are drawn from an initial reading of the contract, not yet a line-by-line audit of the source. Treat this page as a **map to check against** [`ForsVerifier.sol`](https://github.com/RivaLabs-Core/NiceTry/blob/main/src/Verifiers/ForsVerifier.sol) — confirming each number and step is itself one of the first verification tasks. Fix anything that's off and note it in the [project log](/solean-learn/reference/project-log/).
+The parameters and step-by-step below are drawn from an initial reading of the contract, not yet a line-by-line audit of the source. Treat this page as a **map to check against** [`ForsVerifier.sol`](https://github.com/Solvency-Labs/NiceTry/blob/main/src/Verifiers/ForsVerifier.sol) — confirming each number and step is itself one of the first verification tasks. Fix anything that's off and note it in the [project log](/solean-learn/reference/project-log/).
 </Aside>
 
 ## The interface
@@ -91,5 +91,5 @@ Fail-fast. The grinding gate is a cheap comparison; the unrolled climb over 25 t
 
 ## Where to read the real thing
 
-- The contract: [`ForsVerifier.sol`](https://github.com/RivaLabs-Core/NiceTry/blob/main/src/Verifiers/ForsVerifier.sol).
-- The existing Lean model of it: the `verity/NiceTry/Fors/` directory on the [`fors-verity-model` branch](https://github.com/RivaLabs-Core/NiceTry/tree/fors-verity-model/verity) — see [T5 · verity](/solean-learn/tooling/verity/).
+- The contract: [`ForsVerifier.sol`](https://github.com/Solvency-Labs/NiceTry/blob/main/src/Verifiers/ForsVerifier.sol).
+- The proof entrypoint: [`ReviewSurface.lean`](https://github.com/Solvency-Labs/NiceTry/blob/main/verity/NiceTry/Fors/Bridge/ReviewSurface.lean) and the [review path](/solean-learn/project/review-path/).

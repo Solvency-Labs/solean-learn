@@ -5,7 +5,7 @@ description: What this site is for, who it's for, and how to get the most out of
 
 ## Why this site exists
 
-We've been handed a concrete task by Antonio Sanso (Ethereum Foundation): **formally verify [`ForsVerifier.sol`](https://github.com/RivaLabs-Core/NiceTry/blob/main/src/Verifiers/ForsVerifier.sol)**, a Solidity contract that checks a post-quantum signature.
+We've been handed a concrete task by Antonio Sanso (Ethereum Foundation): **formally verify [`ForsVerifier.sol`](https://github.com/Solvency-Labs/NiceTry/blob/main/src/Verifiers/ForsVerifier.sol)**, a Solidity contract that checks a post-quantum signature.
 
 The hard part isn't any single idea. It's that the task sits at the intersection of *four* unfamiliar worlds at once:
 

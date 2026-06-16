@@ -1,6 +1,6 @@
 ---
 title: Verifying ForsVerifier.sol
-description: What "verify the contract" actually means here — the scope, what's trusted, the two routes, and the open questions.
+description: What "verify the contract" means here — the scope, what's trusted, and the theorem we ended up exposing.
 ---
 
 import Question from '../../../components/Question.astro';
@@ -9,16 +9,24 @@ This is where the four tracks converge. By now you should be able to read every 
 
 ## The assignment
 
-From the kickoff with Antonio Sanso: **formally verify [`ForsVerifier.sol`](https://github.com/RivaLabs-Core/NiceTry/blob/main/src/Verifiers/ForsVerifier.sol)** — the standalone FORS+C signature verifier that powers a PQ account-abstraction wallet.
+From the kickoff with Antonio Sanso: **formally verify [`ForsVerifier.sol`](https://github.com/Solvency-Labs/NiceTry/blob/main/src/Verifiers/ForsVerifier.sol)** — the standalone FORS+C signature verifier that powers a PQ account-abstraction wallet.
 
 ## What "verify" means here
 
-`recover(sig, digest)` is a `pure` function: bytes in, address out. "Verifying" it means proving its **specification** and, more importantly, its **soundness**:
+`recover(sig, digest)` is a `pure` function: bytes in, address out. In this
+project, "verifying it" means proving the real verifier computes the same result
+as the clean FORS+C recovery model.
 
-- **Spec / completeness** — a genuine FORS+C signature for `digest` makes `recover` return the legitimate signer.
-- **Soundness** *(the security one)* — you **cannot** make `recover` return the intended signer without a genuine signature. No forgery path.
+The reviewer-facing theorem is:
 
-In [T4 terms](/solean-learn/lean/): soundness is the direction an attacker cares about. The already-observed structural fact — *a signature recovers a non-zero signer only when the omitted FORS tree index is forced to zero* — is a soundness-flavored claim worth nailing down.
+```lean
+pinned_yul_runtime_matches_recover_model
+```
+
+That theorem says: the pinned optimized-Yul artifact parses to the exact runtime
+Lean executes, and that runtime agrees with the clean model on every
+ABI-representable input. See the [review path](/solean-learn/project/review-path/)
+for the shortest file-by-file route.
 
 ## The scoping decision: keccak is trusted
 
@@ -28,14 +36,17 @@ The single most important scope call from the kickoff:
 
 Why this is the right boundary: once keccak is a black box with the standard hash assumptions, FORS verification reduces to **structure** — byte-layout parsing, bit-field index extraction, the Merkle climb wiring, root compression, the grinding gate, and address slicing. That's arithmetic and data-flow reasoning, *not* cryptographic-primitive reasoning. It's what makes a real proof feasible on a sane timeline.
 
-## Two routes (recap)
+## The route we chose
 
 From [the tooling overview](/solean-learn/tooling/):
 
 1. **Reason over the real Yul** under EVMYulLean — highest fidelity to the deployed artifact, hardest.
 2. **Verified reimplementation** in verity, then tie it to the contract via the ABI `recover` + test vectors — and there's [already a FORS model](/solean-learn/tooling/verity/) doing exactly this.
 
-A strong outcome likely **combines** them: build & prove in verity, anchor to reality with EVMYulLean and/or vectors.
+We chose route 1 for the final deployed-verifier theorem. The Verity model is
+still important: it gives the clean FORS+C model and helper verifier used for
+cross-checking. But the final theorem is about the real verifier compiled to
+pinned optimized Yul and executed in EVMYulLean.
 
 ## How it composes with SoLean
 
@@ -57,21 +68,31 @@ Because it collapses the hard part. If we had to reason about keccak's internals
 It **discharges SoLean's abstract verifier oracle**. Today SoLean proves the wallet safe *assuming* a predicate `Verifier(pk, msg, sig)` works. A verified FORS `recover` is a real instance of that predicate, turning "safe under an abstract verifier assumption" into "safe under a real, verified verifier." Two layers, one stack — see [SoLean](/solean-learn/tooling/solean/).
 </Question>
 
-## Open questions to resolve early
+## Resolved choices
 
-These are decisions/unknowns to settle before sinking weeks in — the live ones live in the [project log](/solean-learn/reference/project-log/):
+These were the early decisions. The live status now lives in the
+[roadmap](/solean-learn/project/roadmap/) and [project log](/solean-learn/reference/project-log/).
 
-1. **Which definition of "verify"** does Antonio want — spec-correctness, soundness, or both?
-2. **Which route** — real-Yul (EVMYulLean) vs verity reimplementation vs both?
-3. **Where does our work live** — extend the `fors-verity-model` branch, or model it inside SoLean?
-4. **How far along is the existing verity FORS model**, really? (Read it before committing — this page's contract details are still [pending a source audit](/solean-learn/fors/the-contract/).)
-5. **The composition interface** with SoLean's verifier oracle — what shape lets the FORS proof discharge it?
+1. **Definition of verify:** functional correctness of `recover`, conditional on
+   Keccak and deployment checks. We do not prove FORS unforgeability.
+2. **Route:** prove the real optimized-Yul runtime in EVMYulLean against the
+   clean Lean FORS+C model.
+3. **Repo:** work lives in `Solvency-Labs/NiceTry` on `main`, under
+   `verity/NiceTry/Fors/`.
+4. **Verity helper:** useful background and cross-checking, but not the final
+   deployed-runtime theorem.
+5. **SoLean interface:** the wallet layer still treats the verifier as an
+   oracle; the FORS proof gives the concrete `recover` behavior that can fill
+   that slot.
 
 ## Your first contribution
 
 A concrete on-ramp once you've done the tracks:
 
 - Read `ForsVerifier.sol` and confirm/correct the parameters and steps on [FORS, line by line](/solean-learn/fors/the-contract/).
-- Open the verity `Fors/` files and map each to the algorithm steps.
-- Pick one **structural property** from that page (length discipline is the easiest) and trace how the existing model proves it.
+- Read [the review path](/solean-learn/project/review-path/) and open
+  `ReviewSurface.lean`.
+- Open the `verity/NiceTry/Fors/` model files and map each to the algorithm steps.
+- Pick one **structural property** from that page, such as length discipline, and
+  trace how the model and runtime proof handle it.
 - Log what you find — especially anything that contradicts this guide — in the [project log](/solean-learn/reference/project-log/).

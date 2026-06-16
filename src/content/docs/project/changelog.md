@@ -5,6 +5,19 @@ description: Dated, team-facing updates — what shipped, what changed, what's n
 
 Bigger-picture than the append-only [Project log](/solean-learn/reference/project-log/) (which is decisions + open questions). This is the "what happened and what it means for you" feed.
 
+## 2026-06-16 — review path simplified around the real verifier
+
+The learning site now mirrors the NiceTry reviewer package. The theorem to read
+first is `pinned_yul_runtime_matches_recover_model` in `ReviewSurface.lean`:
+the pinned optimized-Yul artifact parses to the exact runtime Lean executes, and
+that runtime agrees with the clean FORS+C recovery model.
+
+The new [review path](/solean-learn/project/review-path/) explains the full route
+without assuming repo context: clean model → pinned optimized Yul → EVMYulLean
+execution → final comparison. It also makes the easy-to-mix-up part explicit:
+the Verity-generated verifier is a helper/reference version, not the deployed
+runtime theorem.
+
 ## 2026-06-14 — safety verdict and deployment gate made explicit
 
 The Antonio-facing material now answers the practical question directly:
@@ -14,7 +27,7 @@ the deployment and integration checklist passes.
 The report explains that `recover` returns an address rather than a boolean.
 Accepting any nonzero result is unsafe; callers must compare the result with the
 current owner. It also separates what Lean proves from the remaining bytecode,
-digest, signer, key-rotation, Keccak, and transcription conditions.
+digest, signer, key-rotation, Keccak, and compiler/deployment conditions.
 
 NiceTry now includes
 `scripts/check-deployed-fors-verifier.sh RPC_URL VERIFIER_ADDRESS`, which
@@ -24,15 +37,15 @@ byte-for-byte. This turns deployment identity from prose into a release gate.
 ## 2026-06-14 — Antonio reviewer package published
 
 The [verification report](/solean-learn/project/verification-report/) now gives
-one precise claim for review: complete functional refinement of the reviewed
-optimized-Yul transcription, on the exact ABI domain, under
-`evm_keccak_transcript` and `ffi_kec_size`.
+one precise claim for review: complete functional refinement of the optimized-Yul
+runtime, on the exact ABI domain, under `evm_keccak_transcript` and
+`ffi_kec_size`.
 
 The repository adds a one-command audit that fingerprints the Solidity source,
 regenerated optimized IR, and Lean runtime, builds all 1,172 modules, and prints
-the final theorem's assumptions. The report is explicit that fingerprinting
-makes the transcription review reproducible but does not itself prove
-Solidity-to-EVMYul semantic equality.
+the final theorem's assumptions. A later parser theorem made the
+optimized-Yul-to-runtime import kernel-checked; pinned `solc` and deployment
+identity remain production boundaries.
 
 ## 2026-06-14 — Phase 5 trust base drops from seven axioms to two
 
@@ -198,7 +211,7 @@ A genuinely useful EVMYulLean idiom fell out: `step` (the opcode semantics) redu
 **What's proved (Phases 2–3).** The SoLean oracle discharge + refinement-sufficiency theorem, a from-scratch `ByteArray`/memory lemma library, and the **address transcript closed end-to-end** (EVM execution → keccak → the model's `addressFromRoot`). All `sorry`-free, with the trust surface localized to a handful of labeled axioms.
 
 **What changes for you.**
-- **New home:** code work happens in `Solvency-Labs/NiceTry` (fork), branch `fors-verity-model`, under `verity/NiceTry/Fors/Bridge/`. The SoLean repo is now the *methodology + oracle interface* layer, not the dev locus. Setup in [Workstreams](/solean-learn/project/workstreams/).
+- **New home:** code work happens in `Solvency-Labs/NiceTry` under `verity/NiceTry/Fors/Bridge/`. The SoLean repo is now the *methodology + oracle interface* layer, not the dev locus. Setup in [Workstreams](/solean-learn/project/workstreams/).
 - **New goals:** Phase 4 is open for claiming — the **hmsg/leaf/node** shapes (mechanical now, template exists) and the harder **roots loop / full-contract execution** model.
 - **Still pending:** Antonio to confirm route B + the "what counts as verified" bar.
 

@@ -24,6 +24,11 @@ This is the tool for the **"reason over the real Yul"** route. If you want a the
 
 It's also where **keccak** is modeled (`SpongeHash.lean`). That connects directly to our scoping decision: keccak is *given* by this model (assumed/implemented), and we [build on it rather than re-prove it](/solean-learn/task/).
 
+In the finished FORS proof, Lean parses the pinned optimized-Yul artifact into
+`forsVerifierRuntime`, then EVMYulLean executes that runtime. The review theorem
+says this execution matches the clean FORS+C model; see the
+[review path](/solean-learn/project/review-path/).
+
 ## Known limitations (it's work-in-progress)
 
 The README is explicit that it's evolving. Things to be aware of when planning:

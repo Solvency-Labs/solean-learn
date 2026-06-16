@@ -17,12 +17,16 @@ There are two complementary strategies, and the tools line up with them:
 
 1. **Reason over the real Yul** — take what `ForsVerifier.sol` compiles to and prove things about it under **EVMYulLean**'s semantics. Closest to "verify the actual artifact," highest fidelity, hardest.
 
-2. **Verified reimplementation** — write the FORS verifier in **verity**'s Lean DSL, prove it correct, and compile it to Yul; then argue the result matches the deployed contract. The verity FORS model already takes this route and even exposes an ABI-compatible `recover(bytes,bytes32)`.
+2. **Verified reimplementation** — write the FORS verifier in **verity**'s Lean DSL, prove it correct, and compile it to Yul; then argue the result matches the deployed contract.
 
-These aren't mutually exclusive — a strong story uses verity to *build and prove* and EVMYulLean (or test vectors) to *tie it to the real thing*.
+The final FORS result uses route 1 for the deployed verifier. EVMYulLean executes
+the runtime imported from pinned optimized Yul and proves it matches the clean
+FORS+C model. The Verity-generated verifier remains useful as a helper/reference
+version, but it is not the deployed runtime theorem. See the
+[review path](/solean-learn/project/review-path/) for the plain distinction.
 
 ## And SoLean?
 
-SoLean is the **outer layer and the methodology**. It proves the *wallet* logic correct while treating the verifier as an abstract oracle. A finished FORS proof (via either route above) is exactly what lets SoLean's oracle assumption be *discharged* by a real verifier. That's the "two layers, one stack" idea from the stack map — keep it in mind as you read the three tool pages.
+SoLean is the **outer layer and the methodology**. It proves the *wallet* logic correct while treating the verifier as an abstract oracle. The finished FORS proof is what lets that oracle assumption be connected to a real verifier. That's the "two layers, one stack" idea from the stack map — keep it in mind as you read the three tool pages.
 
 Read them in any order, but if you only read one, read [SoLean](/solean-learn/tooling/solean/) — it's *our* project and it frames the whole effort.

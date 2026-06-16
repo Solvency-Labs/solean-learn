@@ -1,7 +1,7 @@
 # SoLean Field Guide
 
 A noob-to-expert learning site for the team task: **formally verify
-[`ForsVerifier.sol`](https://github.com/RivaLabs-Core/NiceTry/blob/main/src/Verifiers/ForsVerifier.sol)**,
+[`ForsVerifier.sol`](https://github.com/Solvency-Labs/NiceTry/blob/main/src/Verifiers/ForsVerifier.sol)**,
 a FORS post-quantum signature verifier on Ethereum, using Lean 4.
 
 It's a curated path across the four worlds the task spans — Ethereum/EVM,
@@ -31,6 +31,7 @@ All pages are Markdown/MDX under `src/content/docs/`:
 - `lean/` — T4: Lean 4 & formal verification
 - `tooling/` — T5: EVMYulLean, verity, SoLean
 - `task/` — T6: the verification task itself
+- `project/` — current proof status, review path, roadmap, and changelog
 - `reference/` — glossary, annotated links, **project log**
 
 The stack-map diagram is `src/components/StackMap.astro`. Sidebar/branding/
